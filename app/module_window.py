@@ -998,7 +998,12 @@ class ModuleWindow(QWidget):
                 cb.addItem("")
                 for opt in options_by_test_id.get(int(test_id), []):
                     cb.addItem(opt)
-                cb.setCurrentText(existing.get((real_cat, test_name), ""))
+                saved_value = existing.get((real_cat, test_name), "")
+
+                if saved_value:
+                    cb.setCurrentText(saved_value)
+                elif title == "Physically Examination" and cb.count() > 1:
+                    cb.setCurrentIndex(1)
                 form.addRow(QLabel(pretty_label(test_name)), cb)
                 widgets.append((test_name, cb))
 

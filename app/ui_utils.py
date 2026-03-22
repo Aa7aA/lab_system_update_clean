@@ -436,12 +436,7 @@ def print_pdf(pdf_path: Path) -> None:
                 ".",
                 1,
             )
-            QMessageBox.information(
-                None,
-                "Print Fallback",
-                "Direct printing is not supported by your PDF application.\n\n"
-                "The PDF was opened instead. Please print it from the PDF viewer."
-            )
+
     except Exception as e:
         QMessageBox.warning(None, "Print Error", f"Failed to print:\n{e}")
 

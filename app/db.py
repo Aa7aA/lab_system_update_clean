@@ -20,15 +20,8 @@ LEGACY_DB_PATH = PROJECT_DIR / "lab.db"
 
 
 def ensure_db_file_location() -> None:
-    """
-    On first run after upgrading, copy the old project-level DB
-    into the new AppData location so old lab data is preserved.
-    """
     if DB_PATH.exists():
         return
-
-    if LEGACY_DB_PATH.exists():
-        shutil.copy2(LEGACY_DB_PATH, DB_PATH)
 
 
 def backup_database() -> Path | None:
@@ -1162,7 +1155,7 @@ def set_lab_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 
 def init_db() -> None:
-    backup_database()
+    
     with get_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS modules (
@@ -1284,17 +1277,16 @@ def init_db() -> None:
         ensure_tests_display_label(conn)
         ensure_normal_ranges_table(conn)
 
-        # Always keep schema/support tables ready
-        ensure_culture_db_structure(conn)
-        ensure_lab_settings_table(conn)
-
-        # Seed built-in module layouts only for a brand-new empty database.
-        # After the lab starts editing modules/tests from inside the app,
-        # startup must NOT overwrite their changes.
+        # Check whether this is a brand-new empty database
         module_count_row = conn.execute("SELECT COUNT(*) AS n FROM modules").fetchone()
         module_count = int(module_count_row["n"] if module_count_row and module_count_row["n"] is not None else 0)
 
+        # Always keep schema/support tables ready
+        ensure_lab_settings_table(conn)
+
         if module_count == 0:
+            # Seed all built-in modules for a fresh database
+            ensure_culture_db_structure(conn)
             ensure_hematology_two_column(conn)
             ensure_titers_two_column(conn)
             ensure_gse_module(conn)
@@ -1302,6 +1294,9 @@ def init_db() -> None:
             ensure_hvs_module(conn)
             ensure_sfa_original_layout(conn)
             ensure_sputum_plus_module(conn)
+        else:
+            # For existing databases, keep Culture structure available
+            ensure_culture_db_structure(conn)
 
         conn.commit()
 
