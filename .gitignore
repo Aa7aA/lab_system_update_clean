@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database
+lab.db
+*.db
+
+# App data / backups / snapshots
+backups/
+support_snapshot.json
+lab_info.json
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

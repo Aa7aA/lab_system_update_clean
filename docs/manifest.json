@@ -1,0 +1,12 @@
+{
+  "latest_version": "1.0.1",
+  "download_url": "https://github.com/YOURNAME/YOURREPO/releases/download/v1.0.1/AlshafaqLab_Setup_1.0.1.exe",
+  "notes": [
+    "Moved database to AppData",
+    "Added automatic database backup",
+    "Added support report export",
+    "Added update checker"
+  ],
+  "mandatory": false,
+  "allowed_labs": []
+}
