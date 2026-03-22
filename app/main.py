@@ -1358,7 +1358,7 @@ class MainWindow(QMainWindow):
         self.settings_window.show()
 
     def check_for_updates(self):
-        manifest_url = "https://YOUR-GITHUB-PAGES-URL/manifest.json"
+        manifest_url = "https://aa7aa.github.io/lab_system_update_clean/manifest.json"
 
         try:
             identity = get_lab_identity()
