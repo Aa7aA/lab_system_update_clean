@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+
 import subprocess
 import sys
 from pathlib import Path
@@ -246,14 +246,12 @@ class UpdateWindow(QWidget):
             )
             return
 
-        silent_args_json = json.dumps(self.info.silent_args or [])
+        
 
         try:
             subprocess.Popen([
                 str(helper_exe),
                 str(installer_path),
-                str(app_exe),
-                silent_args_json,
             ])
         except Exception as e:
             QMessageBox.warning(

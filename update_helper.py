@@ -1,16 +1,86 @@
-import os
+from __future__ import annotations
+
+import ctypes
+import subprocess
 import sys
 import time
-import subprocess
+from pathlib import Path
+
+
+SEE_MASK_NOCLOSEPROCESS = 0x00000040
+SW_SHOWNORMAL = 1
+INFINITE = 0xFFFFFFFF
+
+
+class SHELLEXECUTEINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_ulong),
+        ("fMask", ctypes.c_ulong),
+        ("hwnd", ctypes.c_void_p),
+        ("lpVerb", ctypes.c_wchar_p),
+        ("lpFile", ctypes.c_wchar_p),
+        ("lpParameters", ctypes.c_wchar_p),
+        ("lpDirectory", ctypes.c_wchar_p),
+        ("nShow", ctypes.c_int),
+        ("hInstApp", ctypes.c_void_p),
+        ("lpIDList", ctypes.c_void_p),
+        ("lpClass", ctypes.c_wchar_p),
+        ("hkeyClass", ctypes.c_void_p),
+        ("dwHotKey", ctypes.c_ulong),
+        ("hIconOrMonitor", ctypes.c_void_p),
+        ("hProcess", ctypes.c_void_p),
+    ]
+
+
+def run_elevated_and_wait(exe_path: str, params: str = "") -> int:
+    shell32 = ctypes.windll.shell32
+    kernel32 = ctypes.windll.kernel32
+
+    sei = SHELLEXECUTEINFO()
+    sei.cbSize = ctypes.sizeof(SHELLEXECUTEINFO)
+    sei.fMask = SEE_MASK_NOCLOSEPROCESS
+    sei.hwnd = None
+    sei.lpVerb = "runas"
+    sei.lpFile = exe_path
+    sei.lpParameters = params
+    sei.lpDirectory = str(Path(exe_path).parent)
+    sei.nShow = SW_SHOWNORMAL
+
+    success = shell32.ShellExecuteExW(ctypes.byref(sei))
+    if not success:
+        raise RuntimeError("Failed to start installer with elevation.")
+
+    if not sei.hProcess:
+        raise RuntimeError("Installer process handle was not returned.")
+
+    kernel32.WaitForSingleObject(sei.hProcess, INFINITE)
+
+    exit_code = ctypes.c_ulong()
+    kernel32.GetExitCodeProcess(sei.hProcess, ctypes.byref(exit_code))
+    kernel32.CloseHandle(sei.hProcess)
+    return int(exit_code.value)
+
 
 def main():
-    installer_path = sys.argv[1]
+    if len(sys.argv) < 2:
+        sys.exit(1)
 
-    # Wait for main app to fully close
-    time.sleep(3)
+    installer_path = Path(sys.argv[1]).resolve()
 
-    # Run installer
-    subprocess.Popen(installer_path, shell=True)
+    if not installer_path.exists():
+        sys.exit(2)
+
+    # Give the main app enough time to terminate fully
+    time.sleep(4)
+
+    try:
+        # Let Inno Setup handle launching the app after install via [Run]
+        exit_code = run_elevated_and_wait(str(installer_path), "")
+        if exit_code not in (0, 1641, 3010):
+            sys.exit(exit_code)
+    except Exception:
+        sys.exit(3)
+
 
 if __name__ == "__main__":
     main()

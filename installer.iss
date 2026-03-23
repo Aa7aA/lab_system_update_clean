@@ -1,7 +1,7 @@
 [Setup]
 AppId=ALSHAFAQLAB
 AppName=AL-SHAFAQ LAB
-AppVersion=1.0.2
+AppVersion=1.0.1
 AppPublisher=AL-SHAFAQ LAB
 DefaultDirName={autopf}\AL-SHAFAQ LAB
 DefaultGroupName=AL-SHAFAQ LAB
