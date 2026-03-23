@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import sys
-
+import win32event
+import win32api
+import winerror
 from dataclasses import dataclass, asdict
 from uuid import uuid4
 
@@ -1524,13 +1526,16 @@ class MainWindow(QMainWindow):
 # Entry point
 # ----------------------------
 def main():
+    mutex = win32event.CreateMutex(None, False, "ALSHAFaqLabMutex")
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        sys.exit(0)
+
     init_db()
     app = QApplication(sys.argv)
 
     apply_global_theme(app, dark=False)
 
     window = MainWindow()
-    
     window.show()
 
     sys.exit(app.exec())

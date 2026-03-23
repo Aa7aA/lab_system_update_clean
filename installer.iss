@@ -14,6 +14,9 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=admin
 DisableProgramGroupPage=yes
+CloseApplications=yes
+RestartApplications=yes
+AppMutex=ALSHAFaqLabMutex
 
 [Files]
 Source: "dist\AL-SHAFAQ LAB\AL-SHAFAQ LAB.exe"; DestDir: "{app}"; Flags: ignoreversion
