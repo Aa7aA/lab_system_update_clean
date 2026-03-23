@@ -9,6 +9,6 @@
   "mandatory": false,
   "allowed_labs": [],
   "installer_type": "exe",
-  "silent_args": ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],
+  "silent_args": [],
   "sha256": ""
 }
