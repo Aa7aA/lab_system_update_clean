@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-import webbrowser
+
 from dataclasses import dataclass, asdict
 from uuid import uuid4
 
@@ -45,6 +45,7 @@ from .branding import LAB_BRANDING
 from .version import APP_VERSION
 from .lab_identity import get_lab_identity
 from .updater import fetch_update_manifest, is_newer_version, is_lab_allowed
+from .update_window import UpdateWindow
 from .tests_window import TestsWindow as DbTestsWindow
 from .module_window import ModuleWindow
 from .ui_utils import (
@@ -1390,13 +1391,16 @@ class MainWindow(QMainWindow):
                 f"Current version: {APP_VERSION}\n"
                 f"Latest version: {info.latest_version}\n\n"
                 f"Changes:\n{notes_text}\n\n"
-                f"Open download page?",
+                f"Do you want to download and install it now?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes
             )
 
             if reply == QMessageBox.Yes:
-                webbrowser.open(info.download_url)
+                self.update_window = UpdateWindow(info=info, parent_main_window=self)
+                self.update_window.show()
+                self.update_window.raise_()
+                self.update_window.activateWindow()
         else:
             QMessageBox.information(
                 self,
