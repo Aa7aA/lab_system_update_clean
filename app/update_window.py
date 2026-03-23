@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+
 
 from PySide6.QtCore import QObject, QThread, Signal, Qt
 from PySide6.QtWidgets import (
@@ -246,12 +248,19 @@ class UpdateWindow(QWidget):
             )
             return
 
-        
+        current_pid = os.getpid()
+
+        QMessageBox.information(
+            self,
+            "Update",
+            "The app will now close so the update can be installed."
+        )
 
         try:
             subprocess.Popen([
                 str(helper_exe),
                 str(installer_path),
+                str(current_pid),
             ])
         except Exception as e:
             QMessageBox.warning(
@@ -261,11 +270,6 @@ class UpdateWindow(QWidget):
             )
             return
 
-        QMessageBox.information(
-            self,
-            "Update",
-            "The app will now close so the update can be installed."
-        )
 
         from PySide6.QtWidgets import QApplication
         QApplication.quit()

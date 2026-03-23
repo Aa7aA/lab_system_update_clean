@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ctypes
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -10,6 +9,7 @@ from pathlib import Path
 SEE_MASK_NOCLOSEPROCESS = 0x00000040
 SW_SHOWNORMAL = 1
 INFINITE = 0xFFFFFFFF
+SYNCHRONIZE = 0x00100000
 
 
 class SHELLEXECUTEINFO(ctypes.Structure):
@@ -30,6 +30,20 @@ class SHELLEXECUTEINFO(ctypes.Structure):
         ("hIconOrMonitor", ctypes.c_void_p),
         ("hProcess", ctypes.c_void_p),
     ]
+
+
+def wait_for_pid_to_exit(pid: int, timeout_seconds: int = 30) -> None:
+    kernel32 = ctypes.windll.kernel32
+
+    process_handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not process_handle:
+        # Process may already be gone
+        return
+
+    try:
+        kernel32.WaitForSingleObject(process_handle, timeout_seconds * 1000)
+    finally:
+        kernel32.CloseHandle(process_handle)
 
 
 def run_elevated_and_wait(exe_path: str, params: str = "") -> int:
@@ -62,19 +76,22 @@ def run_elevated_and_wait(exe_path: str, params: str = "") -> int:
 
 
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         sys.exit(1)
 
     installer_path = Path(sys.argv[1]).resolve()
+    parent_pid = int(sys.argv[2])
 
     if not installer_path.exists():
         sys.exit(2)
 
-    # Give the main app enough time to terminate fully
-    time.sleep(4)
+    # Wait until the app process is fully terminated
+    wait_for_pid_to_exit(parent_pid, timeout_seconds=30)
+
+    # Small extra delay to let Windows release file locks
+    time.sleep(2)
 
     try:
-        # Let Inno Setup handle launching the app after install via [Run]
         exit_code = run_elevated_and_wait(str(installer_path), "")
         if exit_code not in (0, 1641, 3010):
             sys.exit(exit_code)
