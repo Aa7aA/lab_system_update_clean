@@ -92,7 +92,10 @@ def main():
     time.sleep(2)
 
     try:
-        exit_code = run_elevated_and_wait(str(installer_path), "")
+        exit_code = run_elevated_and_wait(
+            str(installer_path),
+            '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'
+        )
         if exit_code not in (0, 1641, 3010):
             sys.exit(exit_code)
     except Exception:
