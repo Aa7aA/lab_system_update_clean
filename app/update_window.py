@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-
+from uuid import uuid4
 
 
 from PySide6.QtCore import QObject, QThread, Signal, Qt
@@ -236,23 +238,39 @@ class UpdateWindow(QWidget):
 
         app_exe = Path(sys.executable).resolve()
 
-        # helper should be next to the installed app exe
-        helper_exe = app_exe.parent / "update_helper.exe"
+        # real helper next to installed app
+        installed_helper_exe = app_exe.parent / "update_helper.exe"
 
-        if not helper_exe.exists():
+        if not installed_helper_exe.exists():
             QMessageBox.warning(
                 self,
                 "Update Error",
-                f"Could not find update helper:\n{helper_exe}\n\n"
+                f"Could not find update helper:\n{installed_helper_exe}\n\n"
                 f"You need to package update_helper.exe with the app."
             )
             return
 
         current_pid = os.getpid()
 
+        # Run a TEMP copy of the helper so installer can replace the real helper in Program Files
+        temp_dir = Path(tempfile.gettempdir()) / "AlShafaqLabUpdater"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        temp_helper_exe = temp_dir / f"update_helper_{uuid4().hex}.exe"
+
+        try:
+            shutil.copy2(installed_helper_exe, temp_helper_exe)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Update Error",
+                f"Failed to prepare temporary update helper:\n{e}"
+            )
+            return
+
         try:
             subprocess.Popen([
-                str(helper_exe),
+                str(temp_helper_exe),
                 str(installer_path),
                 str(current_pid),
             ])
