@@ -74,6 +74,17 @@ def run_elevated_and_wait(exe_path: str, params: str = "") -> int:
     kernel32.CloseHandle(sei.hProcess)
     return int(exit_code.value)
 
+def force_kill_process(pid: int):
+    try:
+        import subprocess
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
 
 def main():
     if len(sys.argv) < 3:
@@ -85,11 +96,14 @@ def main():
     if not installer_path.exists():
         sys.exit(2)
 
-    # Wait until the app process is fully terminated
-    wait_for_pid_to_exit(parent_pid, timeout_seconds=30)
+    # Wait for app to exit
+    wait_for_pid_to_exit(parent_pid, timeout_seconds=10)
 
-    # Small extra delay to let Windows release file locks
-    time.sleep(2)
+    # Force kill if still running (very important)
+    force_kill_process(parent_pid)
+
+    # Give Windows time to release file locks
+    time.sleep(3)
 
     try:
         exit_code = run_elevated_and_wait(
@@ -100,6 +114,10 @@ def main():
             sys.exit(exit_code)
     except Exception:
         sys.exit(3)
+
+
+
+
 
 
 if __name__ == "__main__":
