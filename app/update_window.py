@@ -250,12 +250,6 @@ class UpdateWindow(QWidget):
 
         current_pid = os.getpid()
 
-        QMessageBox.information(
-            self,
-            "Update",
-            "The app will now close so the update can be installed."
-        )
-
         try:
             subprocess.Popen([
                 str(helper_exe),
@@ -270,6 +264,9 @@ class UpdateWindow(QWidget):
             )
             return
 
-
         from PySide6.QtWidgets import QApplication
+        QApplication.closeAllWindows()
         QApplication.quit()
+
+        import os
+        os._exit(0)
