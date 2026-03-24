@@ -277,9 +277,17 @@ class SettingsWindow(QWidget):
 
     def open_doctor_manager(self):
         from .doctor_manager_window import DoctorManagerWindow
+
         w = DoctorManagerWindow()
+
+        # Refresh doctor dropdown in the main window immediately
+        if self.parent_main_window is not None:
+            w.doctors_changed.connect(self.parent_main_window.load_doctors)
+
         self._opened_windows.append(w)
-        w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
+        w.destroyed.connect(
+            lambda: self._opened_windows.remove(w) if w in self._opened_windows else None
+        )
         w.show()
 
     def open_normal_range_editor(self):
