@@ -268,5 +268,5 @@ class UpdateWindow(QWidget):
         QApplication.closeAllWindows()
         QApplication.quit()
 
-        import os
+        
         os._exit(0)
