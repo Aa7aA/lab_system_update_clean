@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 import os
 import shutil
+import sys
 from datetime import datetime
 
 from .constants import ANTIBIOTICS
@@ -9,6 +10,12 @@ from .constants import ANTIBIOTICS
 
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = APP_DIR.parent
+
+def resource_path(relative_path: str) -> Path:
+    base_path = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
+    return base_path / relative_path
+
+STARTER_DB_PATH = resource_path("app/data/starter_lab.db")
 
 APP_DATA_DIR = Path(os.getenv("APPDATA", str(PROJECT_DIR))) / "AlshafaqLab"
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -22,6 +29,14 @@ LEGACY_DB_PATH = PROJECT_DIR / "lab.db"
 def ensure_db_file_location() -> None:
     if DB_PATH.exists():
         return
+
+    # Use bundled starter DB
+    if STARTER_DB_PATH.exists():
+        shutil.copy2(STARTER_DB_PATH, DB_PATH)
+        return
+
+    # Fallback: create empty DB
+    DB_PATH.touch()
 
 
 def backup_database() -> Path | None:
@@ -489,6 +504,66 @@ def ensure_sputum_plus_module(conn: sqlite3.Connection) -> None:
     set_options("Mouth flora", [
         "normal mouth flora seen",
     ])
+
+
+def ensure_gue_module(conn: sqlite3.Connection) -> None:
+    MODULE = "GUE"
+    CAT = "GUE"
+
+    # Ensure module exists
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO modules(code, display_name, sort_order)
+        VALUES (?, ?, 45)
+        """,
+        (MODULE, MODULE),
+    )
+
+    # Ensure category exists
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO categories(module_code, name, sort_order, layout_type)
+        VALUES (?, ?, 1, 'gue_override')
+        """,
+        (MODULE, CAT),
+    )
+
+    # Rebuild GUE tests
+    conn.execute("DELETE FROM tests WHERE module_code=? AND category_name=?", (MODULE, CAT))
+
+    def add_dd(test_name: str, sort_order: int) -> None:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO tests(module_code, category_name, test_name, input_type, unit_default, sort_order)
+            VALUES (?, ?, ?, 'dropdown', '', ?)
+            """,
+            (MODULE, CAT, test_name, sort_order),
+        )
+
+    # Physical
+    add_dd("color", 10)
+    add_dd("appearance", 20)
+    add_dd("reaction", 30)
+    add_dd("sp_gravity", 40)
+    add_dd("albumin", 50)
+    add_dd("sugar", 60)
+    add_dd("bile_pigment", 70)
+    add_dd("urobilinogen", 80)
+    add_dd("ketone_bodies", 90)
+    add_dd("protein", 100)
+
+    # Microscopic
+    add_dd("pus_cell", 110)
+    add_dd("rbc", 120)
+    add_dd("epith_cell", 130)
+    add_dd("casts", 140)
+    add_dd("crystals_1", 150)
+    add_dd("crystals_2", 160)
+    add_dd("bacteria", 170)
+    add_dd("other_1", 180)
+    add_dd("other_2", 190)
+
+
 
 
 def ensure_gse_module(conn: sqlite3.Connection) -> None:
@@ -1096,7 +1171,70 @@ def ensure_culture_db_structure(conn: sqlite3.Connection) -> None:
         add_options("Antibiotics", ab, ["", "S", "I", "R"])
 
 
+def ensure_tests_module_structure(conn: sqlite3.Connection) -> None:
+    MODULE = "Tests"
 
+    # Ensure module exists
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO modules(code, display_name, sort_order)
+        VALUES (?, ?, 10)
+        """,
+        (MODULE, MODULE),
+    )
+
+    # Ensure base categories exist
+    categories = [
+        ("Hematology test", 1, "two_col"),
+        ("Titers", 2, "titers_two_col"),
+    ]
+
+    for name, sort_order, layout_type in categories:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO categories(module_code, name, sort_order, layout_type, layout_meta)
+            VALUES (?, ?, ?, ?, '')
+            """,
+            (MODULE, name, sort_order, layout_type),
+        )
+
+    # Ensure some base Hematology tests exist
+    hematology_tests = [
+        ("Hb", "text", "", 10, 1),
+        ("W.B.C", "text", "", 20, 1),
+        ("P.C.V", "text", "", 30, 1),
+        ("Platelets", "text", "", 40, 1),
+    ]
+
+    for test_name, input_type, unit_default, sort_order, col in hematology_tests:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO tests(
+                module_code, category_name, test_name,
+                input_type, unit_default, sort_order, col, pos
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (MODULE, "Hematology test", test_name, input_type, unit_default, sort_order, col, sort_order // 10),
+        )
+
+    # Ensure some base Titers tests exist
+    titers_tests = [
+        ("Widal", "dropdown", "", 10, 1),
+        ("Brucella", "dropdown", "", 20, 1),
+    ]
+
+    for test_name, input_type, unit_default, sort_order, col in titers_tests:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO tests(
+                module_code, category_name, test_name,
+                input_type, unit_default, sort_order, col, pos
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (MODULE, "Titers", test_name, input_type, unit_default, sort_order, col, sort_order // 10),
+        )
 
 
 def ensure_lab_settings_table(conn: sqlite3.Connection) -> None:
@@ -1157,6 +1295,13 @@ def ensure_core_modules(conn: sqlite3.Connection) -> None:
         ("Tests", "Tests", 10),
         ("Culture", "Culture", 15),
         ("CBC", "CBC", 20),
+        ("SFA", "SFA", 30),
+        ("Sputum+", "Sputum+", 40),
+        ("GUE", "GUE", 45),
+        ("GSE", "GSE", 50),
+        ("Torch", "Torch", 55),
+        ("Stone", "Stone", 60),
+        ("HVS", "HVS", 70),
     ]
 
     for code, display_name, sort_order in core_modules:
@@ -1169,10 +1314,8 @@ def ensure_core_modules(conn: sqlite3.Connection) -> None:
         )
 
 
-
-
-
 def init_db() -> None:
+    
     
     with get_conn() as conn:
         conn.executescript("""
@@ -1306,7 +1449,9 @@ def init_db() -> None:
 
         if module_count == 0:
             # Seed all built-in modules for a fresh database
+            ensure_tests_module_structure(conn)
             ensure_culture_db_structure(conn)
+            ensure_gue_module(conn)
             ensure_hematology_two_column(conn)
             ensure_titers_two_column(conn)
             ensure_gse_module(conn)
@@ -1315,8 +1460,10 @@ def init_db() -> None:
             ensure_sfa_original_layout(conn)
             ensure_sputum_plus_module(conn)
         else:
-            # For existing databases, keep Culture structure available
+            # For existing databases, keep structures available
+            ensure_tests_module_structure(conn)
             ensure_culture_db_structure(conn)
+            ensure_gue_module(conn)
 
         conn.commit()
 
