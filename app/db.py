@@ -1313,6 +1313,10 @@ def ensure_core_modules(conn: sqlite3.Connection) -> None:
             (code, display_name, sort_order),
         )
 
+def has_existing_test_data(conn: sqlite3.Connection) -> bool:
+    row = conn.execute("SELECT COUNT(*) FROM tests").fetchone()
+    return bool(row and int(row[0]) > 0)
+
 
 def init_db() -> None:
     
@@ -1447,8 +1451,10 @@ def init_db() -> None:
         ensure_core_modules(conn)
 
 
-        if module_count == 0:
-            # Seed all built-in modules for a fresh database
+        has_test_data = has_existing_test_data(conn)
+
+        if module_count == 0 and not has_test_data:
+            # Only seed a minimal structure when the database is truly empty
             ensure_tests_module_structure(conn)
             ensure_culture_db_structure(conn)
             ensure_gue_module(conn)
@@ -1460,10 +1466,8 @@ def init_db() -> None:
             ensure_sfa_original_layout(conn)
             ensure_sputum_plus_module(conn)
         else:
-            # For existing databases, keep structures available
-            ensure_tests_module_structure(conn)
+            # Existing starter DB or migrated DB: do not overwrite rich structures
             ensure_culture_db_structure(conn)
-            ensure_gue_module(conn)
 
         conn.commit()
 
