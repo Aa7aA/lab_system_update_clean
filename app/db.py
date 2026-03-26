@@ -11,11 +11,19 @@ from .constants import ANTIBIOTICS
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = APP_DIR.parent
 
-def resource_path(relative_path: str) -> Path:
-    base_path = Path(getattr(sys, "_MEIPASS", PROJECT_DIR))
-    return base_path / relative_path
+def get_starter_db_path() -> Path:
+    # Running as packaged app (PyInstaller one-folder)
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidate = exe_dir / "_internal" / "app" / "data" / "starter_lab.db"
+        if candidate.exists():
+            return candidate
 
-STARTER_DB_PATH = resource_path("app/data/starter_lab.db")
+    # Running from source
+    return PROJECT_DIR / "app" / "data" / "starter_lab.db"
+
+
+STARTER_DB_PATH = get_starter_db_path()
 
 APP_DATA_DIR = Path(os.getenv("APPDATA", str(PROJECT_DIR))) / "AlshafaqLab"
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
