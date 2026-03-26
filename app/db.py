@@ -1152,6 +1152,24 @@ def set_lab_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
 
 
 
+def ensure_core_modules(conn: sqlite3.Connection) -> None:
+    core_modules = [
+        ("Tests", "Tests", 10),
+        ("Culture", "Culture", 15),
+        ("CBC", "CBC", 20),
+    ]
+
+    for code, display_name, sort_order in core_modules:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO modules(code, display_name, sort_order)
+            VALUES (?, ?, ?)
+            """,
+            (code, display_name, sort_order),
+        )
+
+
+
 
 
 def init_db() -> None:
@@ -1283,6 +1301,8 @@ def init_db() -> None:
 
         # Always keep schema/support tables ready
         ensure_lab_settings_table(conn)
+        ensure_core_modules(conn)
+
 
         if module_count == 0:
             # Seed all built-in modules for a fresh database
