@@ -93,6 +93,171 @@ def _build_flagged_rows_grid(
     return inputs, flags, ranges
 
 
+
+
+
+def _build_mixed_rows_grid(
+    grid: QGridLayout,
+    test_defs: list[tuple[str, str, list[str]]],
+) -> tuple[dict[str, QWidget], dict[str, QLabel], dict[str, QLabel]]:
+    """
+    Build rows into an existing grid using input_type per test.
+
+    test_defs format:
+        [(test_name, input_type, options), ...]
+
+    Returns:
+        inputs, flags, ranges
+    """
+    inputs: dict[str, QWidget] = {}
+    flags: dict[str, QLabel] = {}
+    ranges: dict[str, QLabel] = {}
+
+    for r, (test_name, input_type, options) in enumerate(test_defs):
+        lbl = QLabel(f"{test_name} :")
+        lbl.setMinimumWidth(78)
+
+        if (input_type or "").strip() == "dropdown":
+            w = QComboBox()
+            w.setEditable(True)
+            w.setInsertPolicy(QComboBox.NoInsert)
+            _add_combo_items(w, options or [], ensure_empty=True)
+            w.setMinimumHeight(26)
+            w.setMinimumWidth(96)
+        else:
+            w = QLineEdit()
+            w.setPlaceholderText("Result")
+            w.setMinimumHeight(26)
+            w.setMinimumWidth(96)
+
+        flag_lbl = _make_flag_label()
+        range_lbl = _make_range_label()
+        range_lbl.hide()
+
+        grid.addWidget(lbl, r, 0)
+        grid.addWidget(w, r, 1)
+        grid.addWidget(flag_lbl, r, 2)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 2)
+        grid.setColumnStretch(2, 0)
+
+        inputs[test_name] = w
+        flags[test_name] = flag_lbl
+        ranges[test_name] = range_lbl
+
+    grid.setRowStretch(len(test_defs), 1)
+    return inputs, flags, ranges
+
+
+def build_three_panel_mixed_form_with_flags(
+    col1: list[tuple[str, str, list[str]]],
+    col2: list[tuple[str, str, list[str]]],
+    col3: list[tuple[str, str, list[str]]],
+    col1_title: str = "",
+    col2_title: str = "",
+    col3_title: str = "",
+) -> tuple[QWidget, dict[str, QWidget], dict[str, QLabel], dict[str, QLabel]]:
+    tab = QWidget()
+    tab.setLayoutDirection(Qt.LeftToRight)
+
+    outer = QHBoxLayout(tab)
+    outer.setContentsMargins(10, 10, 10, 10)
+    outer.setSpacing(18)
+
+    def make_column(test_defs: list[tuple[str, str, list[str]]], title: str):
+        box = QGroupBox(title)
+        box.setObjectName("TestColumnCard")
+
+        grid = QGridLayout(box)
+        grid.setContentsMargins(8, 6, 8, 6)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(4)
+
+        inputs, flags, ranges = _build_mixed_rows_grid(grid, test_defs)
+        return box, inputs, flags, ranges
+
+    b1, i1, f1, r1 = make_column(col1, col1_title)
+    b2, i2, f2, r2 = make_column(col2, col2_title)
+    b3, i3, f3, r3 = make_column(col3, col3_title)
+
+    outer.addWidget(b1, 1)
+    outer.addWidget(b2, 1)
+    outer.addWidget(b3, 1)
+
+    inputs = {**i1, **i2, **i3}
+    flags = {**f1, **f2, **f3}
+    ranges = {**r1, **r2, **r3}
+    return tab, inputs, flags, ranges
+
+
+def build_two_column_mixed_form_with_flags(
+    col1: list[tuple[str, str, list[str]]],
+    col2: list[tuple[str, str, list[str]]],
+    title: str = "",
+) -> tuple[QWidget, dict[str, QWidget], dict[str, QLabel], dict[str, QLabel]]:
+    tab = QWidget()
+    tab.setLayoutDirection(Qt.LeftToRight)
+
+    outer = QHBoxLayout(tab)
+    outer.setContentsMargins(10, 10, 10, 10)
+    outer.setSpacing(18)
+
+    def make_column(test_defs: list[tuple[str, str, list[str]]]):
+        box = QGroupBox(title)
+        box.setObjectName("TestColumnCard")
+
+        grid = QGridLayout(box)
+        grid.setContentsMargins(8, 6, 8, 6)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(4)
+
+        inputs, flags, ranges = _build_mixed_rows_grid(grid, test_defs)
+        return box, inputs, flags, ranges
+
+    b1, i1, f1, r1 = make_column(col1)
+    b2, i2, f2, r2 = make_column(col2)
+
+    outer.addWidget(b1, 1)
+    outer.addWidget(b2, 1)
+
+    inputs = {**i1, **i2}
+    flags = {**f1, **f2}
+    ranges = {**r1, **r2}
+    return tab, inputs, flags, ranges
+
+
+def build_single_column_mixed_form_with_flags(
+    test_defs: list[tuple[str, str, list[str]]],
+    title: str = "",
+) -> tuple[QWidget, dict[str, QWidget], dict[str, QLabel], dict[str, QLabel]]:
+    tab = QWidget()
+    tab.setLayoutDirection(Qt.LeftToRight)
+
+    outer = QVBoxLayout(tab)
+    outer.setContentsMargins(10, 10, 10, 10)
+
+    box = QGroupBox(title)
+    box.setObjectName("TestColumnCard")
+
+    grid = QGridLayout(box)
+    grid.setContentsMargins(8, 6, 8, 6)
+    grid.setHorizontalSpacing(8)
+    grid.setVerticalSpacing(4)
+
+    inputs, flags, ranges = _build_mixed_rows_grid(grid, test_defs)
+
+    outer.addWidget(box)
+    return tab, inputs, flags, ranges
+
+
+
+
+
+
+
+
+
 # ------------------------------------------------------------
 # 3 COLUMNS: label | input | flag | range
 # ------------------------------------------------------------

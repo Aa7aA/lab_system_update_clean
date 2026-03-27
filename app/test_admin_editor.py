@@ -896,7 +896,7 @@ class ModuleTestAdminWindow(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self.rebuild_module_buttons()
+        self.load_rows()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

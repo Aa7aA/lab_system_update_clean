@@ -37,6 +37,9 @@ from .ui_builders import (
     build_three_panel_form_with_flags,
     build_single_column_form_with_flags,
     build_two_column_form_with_flags,
+    build_three_panel_mixed_form_with_flags,
+    build_single_column_mixed_form_with_flags,
+    build_two_column_mixed_form_with_flags,
     build_two_panel_dropdowns_with_titer,
     build_widal_test_table,
 )
@@ -536,7 +539,7 @@ class TestsWindow(QWidget):
     def _wire_live_flags(
         self,
         category_name: str,
-        inputs: dict[str, QLineEdit],
+        inputs: dict[str, Any],
         flags: dict[str, QLabel],
         ranges: dict[str, QLabel],
     ):
@@ -544,15 +547,21 @@ class TestsWindow(QWidget):
             matched = self._matching_range_row(category_name, test_name)
             range_lbl.setText(self._format_range(matched))
 
-        for test_name, edit in inputs.items():
+        for test_name, widget in inputs.items():
             flag_lbl = flags.get(test_name)
             if not flag_lbl:
                 continue
 
-            self._update_one_flag(category_name, test_name, edit, flag_lbl)
+            # Flags only apply to numeric text inputs, not dropdowns
+            if not isinstance(widget, QLineEdit):
+                flag_lbl.setText("")
+                widget.setStyleSheet("")
+                continue
 
-            edit.textChanged.connect(
-                lambda _=None, cat=category_name, tn=test_name, e=edit, fl=flag_lbl:
+            self._update_one_flag(category_name, test_name, widget, flag_lbl)
+
+            widget.textChanged.connect(
+                lambda _=None, cat=category_name, tn=test_name, e=widget, fl=flag_lbl:
                     self._update_one_flag(cat, tn, e, fl)
             )
 
@@ -874,20 +883,44 @@ class TestsWindow(QWidget):
                     continue
 
                 if lt == "three_col":
-                    col1, col2, col3 = [], [], []
-                    for _id, test_name, _input_type, _unit, col, pos, so in tests:
-                        if col == 1:
-                            col1.append(test_name)
-                        elif col == 2:
-                            col2.append(test_name)
-                        elif col == 3:
-                            col3.append(test_name)
+                    dropdown_ids = [t[0] for t in tests if (t[2] or "") == "dropdown"]
+                    options_by_test_id: dict[int, list[str]] = defaultdict(list)
 
-                    tab, inputs, flags, ranges = build_three_panel_form_with_flags(col1, col2, col3)
+                    if dropdown_ids:
+                        placeholders = ",".join("?" for _ in dropdown_ids)
+                        opt_rows = conn.execute(
+                            f"""
+                            SELECT test_id, option_value
+                            FROM test_options
+                            WHERE test_id IN ({placeholders})
+                            ORDER BY sort_order, option_value
+                            """,
+                            dropdown_ids,
+                        ).fetchall()
+                        for test_id, val in opt_rows:
+                            options_by_test_id[int(test_id)].append(str(val))
+
+                    col1, col2, col3 = [], [], []
+                    for test_id, test_name, input_type, _unit, col, pos, so in tests:
+                        row_def = (str(test_name), str(input_type or "text"), options_by_test_id.get(int(test_id), []))
+                        if col == 1:
+                            col1.append(row_def)
+                        elif col == 2:
+                            col2.append(row_def)
+                        elif col == 3:
+                            col3.append(row_def)
+                        else:
+                            col1.append(row_def)
+
+                    tab, inputs, flags, ranges = build_three_panel_mixed_form_with_flags(col1, col2, col3)
 
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
-                            w.setText(existing[(cat_name, tname)])
+                            saved = existing[(cat_name, tname)]
+                            if isinstance(w, QComboBox):
+                                w.setCurrentText(saved)
+                            else:
+                                w.setText(saved)
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -899,18 +932,40 @@ class TestsWindow(QWidget):
                     continue
 
                 if lt == "two_col":
-                    col1, col2 = [], []
-                    for _id, test_name, _input_type, _unit, col, pos, so in tests:
-                        if col == 2:
-                            col2.append(test_name)
-                        else:
-                            col1.append(test_name)
+                    dropdown_ids = [t[0] for t in tests if (t[2] or "") == "dropdown"]
+                    options_by_test_id: dict[int, list[str]] = defaultdict(list)
 
-                    tab, inputs, flags, ranges = build_two_column_form_with_flags(col1, col2, cat_name)
+                    if dropdown_ids:
+                        placeholders = ",".join("?" for _ in dropdown_ids)
+                        opt_rows = conn.execute(
+                            f"""
+                            SELECT test_id, option_value
+                            FROM test_options
+                            WHERE test_id IN ({placeholders})
+                            ORDER BY sort_order, option_value
+                            """,
+                            dropdown_ids,
+                        ).fetchall()
+                        for test_id, val in opt_rows:
+                            options_by_test_id[int(test_id)].append(str(val))
+
+                    col1, col2 = [], []
+                    for test_id, test_name, input_type, _unit, col, pos, so in tests:
+                        row_def = (str(test_name), str(input_type or "text"), options_by_test_id.get(int(test_id), []))
+                        if col == 2:
+                            col2.append(row_def)
+                        else:
+                            col1.append(row_def)
+
+                    tab, inputs, flags, ranges = build_two_column_mixed_form_with_flags(col1, col2, cat_name)
 
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
-                            w.setText(existing[(cat_name, tname)])
+                            saved = existing[(cat_name, tname)]
+                            if isinstance(w, QComboBox):
+                                w.setCurrentText(saved)
+                            else:
+                                w.setText(saved)
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -922,12 +977,37 @@ class TestsWindow(QWidget):
                     continue
 
                 if lt == "single_col":
-                    names = [t[1] for t in tests]
-                    tab, inputs, flags, ranges = build_single_column_form_with_flags(names, cat_name)
+                    dropdown_ids = [t[0] for t in tests if (t[2] or "") == "dropdown"]
+                    options_by_test_id: dict[int, list[str]] = defaultdict(list)
+
+                    if dropdown_ids:
+                        placeholders = ",".join("?" for _ in dropdown_ids)
+                        opt_rows = conn.execute(
+                            f"""
+                            SELECT test_id, option_value
+                            FROM test_options
+                            WHERE test_id IN ({placeholders})
+                            ORDER BY sort_order, option_value
+                            """,
+                            dropdown_ids,
+                        ).fetchall()
+                        for test_id, val in opt_rows:
+                            options_by_test_id[int(test_id)].append(str(val))
+
+                    row_defs = [
+                        (str(test_name), str(input_type or "text"), options_by_test_id.get(int(test_id), []))
+                        for test_id, test_name, input_type, _unit, col, pos, sort_order in tests
+                    ]
+
+                    tab, inputs, flags, ranges = build_single_column_mixed_form_with_flags(row_defs, cat_name)
 
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
-                            w.setText(existing[(cat_name, tname)])
+                            saved = existing[(cat_name, tname)]
+                            if isinstance(w, QComboBox):
+                                w.setCurrentText(saved)
+                            else:
+                                w.setText(saved)
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 

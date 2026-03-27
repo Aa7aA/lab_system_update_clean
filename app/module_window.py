@@ -37,6 +37,9 @@ from .ui_builders import (
     build_three_panel_form_with_flags,
     build_single_column_form_with_flags,
     build_two_column_form_with_flags,
+    build_three_panel_mixed_form_with_flags,
+    build_single_column_mixed_form_with_flags,
+    build_two_column_mixed_form_with_flags,
     build_dropdown_pairs,
     build_two_panel_dropdowns,
     build_notes_tab,
@@ -787,7 +790,7 @@ class ModuleWindow(QWidget):
     def _wire_live_flags(
         self,
         category_name: str,
-        inputs: dict[str, QLineEdit],
+        inputs: dict[str, Any],
         flags: dict[str, QLabel],
         ranges: dict[str, QLabel],
     ) -> None:
@@ -798,14 +801,20 @@ class ModuleWindow(QWidget):
             matched = self._matching_range_row(category_name, test_name)
             range_lbl.setText(self._format_range(matched))
 
-        for test_name, edit in inputs.items():
+        for test_name, widget in inputs.items():
             flag_lbl = flags.get(test_name)
             if not flag_lbl:
                 continue
 
-            self._update_one_flag(category_name, test_name, edit, flag_lbl)
-            edit.textChanged.connect(
-                lambda _=None, cat=category_name, tn=test_name, e=edit, fl=flag_lbl:
+            # Flags only apply to numeric text inputs, not dropdowns
+            if not isinstance(widget, QLineEdit):
+                flag_lbl.setText("")
+                widget.setStyleSheet("")
+                continue
+
+            self._update_one_flag(category_name, test_name, widget, flag_lbl)
+            widget.textChanged.connect(
+                lambda _=None, cat=category_name, tn=test_name, e=widget, fl=flag_lbl:
                     self._update_one_flag(cat, tn, e, fl)
             )
 
@@ -1350,43 +1359,65 @@ class ModuleWindow(QWidget):
                 self.tabs.addTab(tab, cat_name)
                 continue
 
-            if text_tests and layout_type in {"three_panel", "three_col", "three_column"}:
-                c1 = [t[1] for t in text_tests if (t[5] or 1) == 1]
-                c2 = [t[1] for t in text_tests if (t[5] or 2) == 2]
-                c3 = [t[1] for t in text_tests if (t[5] or 3) == 3]
-                names = [t[1] for t in text_tests]
-                if not (c1 or c2 or c3):
-                    c1, c2, c3 = names[0::3], names[1::3], names[2::3]
+            if layout_type in {"three_panel", "three_col", "three_column"}:
+                col1, col2, col3 = [], [], []
 
-                tab, inputs, flags, ranges = build_three_panel_form_with_flags(
-                    c1, c2, c3, col1_title="", col2_title="", col3_title=""
-                )
+                for t in tests:
+                    tid, tname, itype, unit, so, col, pos = t
+                    row_def = (str(tname), str(itype or "text"), options_by_id.get(int(tid), []))
+
+                    if col == 1:
+                        col1.append(row_def)
+                    elif col == 2:
+                        col2.append(row_def)
+                    elif col == 3:
+                        col3.append(row_def)
+                    else:
+                        col1.append(row_def)
+
+                tab, inputs, flags, ranges = build_three_panel_mixed_form_with_flags(col1, col2, col3)
+
+                for tname, w in inputs.items():
+                    saved = existing.get((cat_name, tname), "")
+                    if isinstance(w, QComboBox):
+                        w.setCurrentText(saved)
+                    else:
+                        w.setText(saved)
+
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
-                for t in text_tests:
-                    test_name = t[1]
-                    ed = inputs.get(test_name)
-                    if ed:
-                        ed.setText(existing.get((cat_name, test_name), ""))
-                        self._registry.append((cat_name, test_name, ed, t[3] or ""))
+
+                for tname, w in inputs.items():
+                    self._registry.append((cat_name, tname, w, ""))
+
                 self.tabs.addTab(tab, cat_name)
                 continue
 
-            if text_tests and layout_type in {"two_col", "two_column", "2col"}:
-                c1 = [t[1] for t in text_tests if (t[5] or 1) == 1]
-                c2 = [t[1] for t in text_tests if (t[5] or 2) == 2]
-                names = [t[1] for t in text_tests]
-                if not (c1 or c2):
-                    mid = (len(names) + 1) // 2
-                    c1, c2 = names[:mid], names[mid:]
+            if layout_type in {"two_col", "two_column", "2col"}:
+                col1, col2 = [], []
 
-                tab, inputs, flags, ranges = build_two_column_form_with_flags(c1, c2, title=cat_name)
+                for t in tests:
+                    tid, tname, itype, unit, so, col, pos = t
+                    row_def = (str(tname), str(itype or "text"), options_by_id.get(int(tid), []))
+
+                    if col == 2:
+                        col2.append(row_def)
+                    else:
+                        col1.append(row_def)
+
+                tab, inputs, flags, ranges = build_two_column_mixed_form_with_flags(col1, col2, cat_name)
+
+                for tname, w in inputs.items():
+                    saved = existing.get((cat_name, tname), "")
+                    if isinstance(w, QComboBox):
+                        w.setCurrentText(saved)
+                    else:
+                        w.setText(saved)
+
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
-                for t in text_tests:
-                    test_name = t[1]
-                    ed = inputs.get(test_name)
-                    if ed:
-                        ed.setText(existing.get((cat_name, test_name), ""))
-                        self._registry.append((cat_name, test_name, ed, t[3] or ""))
+
+                for tname, w in inputs.items():
+                    self._registry.append((cat_name, tname, w, ""))
+
                 self.tabs.addTab(tab, cat_name)
                 continue
 
@@ -1405,16 +1436,26 @@ class ModuleWindow(QWidget):
                 self.tabs.addTab(tab, cat_name)
                 continue
 
-            if text_tests and not dd_tests and not ta_tests:
-                names = [t[1] for t in text_tests]
-                tab, inputs, flags, ranges = build_single_column_form_with_flags(names, title=cat_name)
+            if layout_type in {"single_col", "single_column", "form"}:
+                row_defs = [
+                    (str(t[1]), str(t[2] or "text"), options_by_id.get(int(t[0]), []))
+                    for t in tests
+                ]
+
+                tab, inputs, flags, ranges = build_single_column_mixed_form_with_flags(row_defs, cat_name)
+
+                for tname, w in inputs.items():
+                    saved = existing.get((cat_name, tname), "")
+                    if isinstance(w, QComboBox):
+                        w.setCurrentText(saved)
+                    else:
+                        w.setText(saved)
+
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
-                for t in text_tests:
-                    test_name = t[1]
-                    ed = inputs.get(test_name)
-                    if ed:
-                        ed.setText(existing.get((cat_name, test_name), ""))
-                        self._registry.append((cat_name, test_name, ed, t[3] or ""))
+
+                for tname, w in inputs.items():
+                    self._registry.append((cat_name, tname, w, ""))
+
                 self.tabs.addTab(tab, cat_name)
                 continue
 
