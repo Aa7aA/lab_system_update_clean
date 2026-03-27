@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 import shutil
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, Signal
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtWidgets import (
     QWidget,
@@ -63,6 +63,7 @@ from .branding import LAB_BRANDING
 
 
 class ModuleWindow(QWidget):
+    report_finalized = Signal()
     """
     Generic DB-driven module window.
 
@@ -77,6 +78,7 @@ class ModuleWindow(QWidget):
         self.module_code = (module_code or "").strip()
         self.patient = patient
         self.report_id = report_id
+        self._report_finalized = False
 
         self.setWindowTitle(self.module_code)
         self._drag_pos: QPoint | None = None
@@ -564,6 +566,7 @@ class ModuleWindow(QWidget):
                 )
 
             print_pdf(temp_pdf)
+            self._report_finalized = True
             QMessageBox.information(self, "الطباعة", "تم إرسال التقرير إلى الطابعة.")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في الطباعة", f"فشلت عملية الطباعة:\n{e}")
@@ -632,7 +635,7 @@ class ModuleWindow(QWidget):
 
             save_path = Path(save_path_str)
             shutil.copyfile(temp_pdf, save_path)
-
+            self._report_finalized = True
             QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في PDF", f"فشل حفظ ملف PDF:\n{e}")
@@ -1509,4 +1512,6 @@ class ModuleWindow(QWidget):
 
 
     def closeEvent(self, event):  # type: ignore[override]
+        if self._report_finalized:
+            self.report_finalized.emit()
         return super().closeEvent(event)

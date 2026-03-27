@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QScrollArea,
 )
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, Signal
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtCore import Qt
 
@@ -44,10 +44,12 @@ from .ui_utils import make_pdf_report, group_results, print_pdf, apply_global_th
 from .branding import LAB_BRANDING
 
 class TestsWindow(QWidget):
+    report_finalized = Signal()
     def __init__(self, patient: dict | Any | None = None, report_id: str = ""):
         super().__init__()
         self.patient = patient or {}
         self.report_id = report_id
+        self._report_finalized = False
 
         self.setWindowTitle("تحاليل المختبر")
         fit_window_to_screen(
@@ -634,6 +636,8 @@ class TestsWindow(QWidget):
 
 
     def closeEvent(self, event):  # type: ignore[override]
+        if self._report_finalized:
+            self.report_finalized.emit()
         return super().closeEvent(event)
     # --------------------------------------------------
     # PRINT / PDF
@@ -744,6 +748,7 @@ class TestsWindow(QWidget):
                 footer_text=footer_text,
             )
             print_pdf(pdf_path)
+            self._report_finalized = True
 
             QMessageBox.information(self, "الطباعة", "تم إرسال التقرير إلى الطابعة.")
         except Exception as e:
@@ -782,7 +787,8 @@ class TestsWindow(QWidget):
 
             save_path = Path(save_path_str)
             shutil.copyfile(temp_pdf, save_path)
-
+            
+            self._report_finalized = True
             QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في PDF", f"فشل حفظ ملف PDF:\n{e}")

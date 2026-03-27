@@ -14,7 +14,7 @@ from uuid import uuid4
 from PySide6.QtGui import QPixmap, QAction, QColor
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QDate, QPoint
+from PySide6.QtCore import Qt, QDate, QPoint, Signal
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -82,10 +82,12 @@ class PatientData:
 # CBC Window (overlay only)
 # ----------------------------
 class CBCWindow(QMainWindow):
+    report_finalized = Signal()
     def __init__(self, patient: PatientData, report_id: str):
         super().__init__()
         self.patient = patient
         self.report_id = report_id
+        self._report_finalized = False
 
         self.setWindowTitle("CBC")
         self.resize(1000, 520)
@@ -172,6 +174,7 @@ class CBCWindow(QMainWindow):
         try:
             pdf_path = self._build_overlay_pdf()
             print_pdf_and_delete(pdf_path)
+            self._report_finalized = True
         except Exception as e:
             QMessageBox.warning(self, "خطأ في الطباعة", f"فشلت طباعة ملف CBC:\n{e}")
 
@@ -181,9 +184,17 @@ class CBCWindow(QMainWindow):
             suggested_name = f"CBC_{self.patient.name or 'patient'}_{self.report_id}.pdf"
             save_path = save_pdf_via_dialog(self, pdf_path, suggested_name=suggested_name)
             if save_path:
+                self._report_finalized = True
                 QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في PDF", f"فشل حفظ ملف CBC:\n{e}")
+
+
+    def closeEvent(self, event):
+        if self._report_finalized:
+            self.report_finalized.emit()
+        super().closeEvent(event)
+
 
 
 # ----------------------------
@@ -1445,20 +1456,37 @@ class MainWindow(QMainWindow):
 
 
 
-    def _ensure_report_id(self) -> str:
-        if not self.report_id:
-            self.report_id = str(uuid4())
-        return self.report_id
+    def _new_report_id(self) -> str:
+        return str(uuid4())
+
+
+    def reset_patient_session(self) -> None:
+        self.report_id = ""
+
+        self.patient_name.clear()
+        self.doctor.setCurrentIndex(0)
+        self.age.setValue(0)
+        self.gender.setCurrentIndex(0)
+        self.date.setDate(QDate.currentDate())
+
+    def _wire_finalize_reset(self, child_window) -> None:
+        if hasattr(child_window, "report_finalized"):
+            child_window.report_finalized.connect(self.reset_patient_session)
+
+
+
+
 
     def on_module_clicked(self, module_code: str):
         if not self._can_open_modules():
             return
 
         patient = self.get_patient_data()
-        report_id = self._ensure_report_id()
+        report_id = self._new_report_id()
 
         if module_code == "Tests":
             self._db_tests_win = DbTestsWindow(patient=asdict(patient), report_id=report_id)
+            self._wire_finalize_reset(self._db_tests_win)
             self._opened_windows.append(self._db_tests_win)
             self._db_tests_win.destroyed.connect(
                 lambda: self._opened_windows.remove(self._db_tests_win) if self._db_tests_win in self._opened_windows else None
@@ -1469,15 +1497,18 @@ class MainWindow(QMainWindow):
         if module_code == "Culture":
             from .culture_window import CultureWindow
             self._culture_win = CultureWindow(patient, report_id=report_id)
+            self._wire_finalize_reset(self._culture_win)
             show_blocking_child(self, self._culture_win)
             return
 
         if module_code == "CBC":
             self._cbc_win = CBCWindow(patient, report_id=report_id)
+            self._wire_finalize_reset(self._cbc_win)
             show_blocking_child(self, self._cbc_win)
             return
 
         self._module_win = ModuleWindow(module_code=module_code, patient=patient, report_id=report_id)
+        self._wire_finalize_reset(self._module_win)
         self._opened_windows.append(self._module_win)
         self._module_win.destroyed.connect(
             lambda: self._opened_windows.remove(self._module_win) if self._module_win in self._opened_windows else None

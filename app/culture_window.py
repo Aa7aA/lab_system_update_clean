@@ -7,7 +7,7 @@ from PySide6.QtGui import QPixmap, QColor
 from pathlib import Path
 
 
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, Signal
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -42,10 +42,12 @@ from .branding import LAB_BRANDING
 
 
 class CultureWindow(QMainWindow):
+    report_finalized = Signal()
     def __init__(self, patient, report_id: str | None = None):
         super().__init__()
         self.patient = patient
         self.report_id: str | None = report_id
+        self._report_finalized = False
 
         self._drag_pos: QPoint | None = None
         self.is_dark_mode = False
@@ -445,7 +447,7 @@ class CultureWindow(QMainWindow):
             footer_text=footer_text,
         )
         print_pdf_and_delete(pdf_path)
-
+        self._report_finalized = True
         QMessageBox.information(self, "Done", f"Saved + printed.\nResults: {count}\nReportID: {report_id[:8]}")
 
     def on_pdf(self) -> None:
@@ -468,6 +470,7 @@ class CultureWindow(QMainWindow):
         suggested = f"{getattr(self.patient, 'name', 'patient')}_{getattr(self.patient, 'date_iso', '')}_Culture_{report_id[:8]}.pdf"
         out = save_pdf_via_dialog(self, pdf_path, suggested_name=suggested)
         if out:
+            self._report_finalized = True
             QMessageBox.information(self, "Saved", f"PDF saved.\nResults: {count}\nFile:\n{out}")
 
     # ---------------------------------
@@ -522,5 +525,12 @@ class CultureWindow(QMainWindow):
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
         super().mouseReleaseEvent(event)
+
+
+    def closeEvent(self, event):
+        if self._report_finalized:
+            self.report_finalized.emit()
+        super().closeEvent(event)
+
 
                     

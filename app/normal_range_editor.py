@@ -155,8 +155,19 @@ class SimpleNormalRangeDialog(QDialog):
 
         self.male_min_edit = QLineEdit(str(male_row.get("min_value") or ""))
         self.male_max_edit = QLineEdit(str(male_row.get("max_value") or ""))
+        self.male_label_edit = QLineEdit(str(male_row.get("label") or ""))
+
         self.female_min_edit = QLineEdit(str(female_row.get("min_value") or ""))
         self.female_max_edit = QLineEdit(str(female_row.get("max_value") or ""))
+        self.female_label_edit = QLineEdit(str(female_row.get("label") or ""))
+
+        self.male_min_edit.setPlaceholderText("الحد الأدنى للذكر")
+        self.male_max_edit.setPlaceholderText("الحد الأعلى للذكر")
+        self.male_label_edit.setPlaceholderText("وصف الذكر - مثال: Male")
+
+        self.female_min_edit.setPlaceholderText("الحد الأدنى للأنثى")
+        self.female_max_edit.setPlaceholderText("الحد الأعلى للأنثى")
+        self.female_label_edit.setPlaceholderText("وصف الأنثى - مثال: Female")
 
         self.male_min_edit.setPlaceholderText("الحد الأدنى للذكر")
         self.male_max_edit.setPlaceholderText("الحد الأعلى للذكر")
@@ -165,8 +176,11 @@ class SimpleNormalRangeDialog(QDialog):
 
         gender_form.addRow("الذكر - الحد الأدنى:", self.male_min_edit)
         gender_form.addRow("الذكر - الحد الأعلى:", self.male_max_edit)
+        gender_form.addRow("الذكر - الوصف:", self.male_label_edit)
+
         gender_form.addRow("الأنثى - الحد الأدنى:", self.female_min_edit)
         gender_form.addRow("الأنثى - الحد الأعلى:", self.female_max_edit)
+        gender_form.addRow("الأنثى - الوصف:", self.female_label_edit)
 
         root.addWidget(self.gender_box)
 
@@ -405,10 +419,15 @@ class SimpleNormalRangeDialog(QDialog):
             "unit": self.unit_edit.text().strip(),
             "subject": self.subject_edit.text().strip(),
             "normal_text": self.normal_text_edit.text().strip(),
+
             "male_min": self.male_min_edit.text().strip(),
             "male_max": self.male_max_edit.text().strip(),
+            "male_label": self.male_label_edit.text().strip(),
+
             "female_min": self.female_min_edit.text().strip(),
             "female_max": self.female_max_edit.text().strip(),
+            "female_label":self.female_label_edit.text().strip(),
+
             "age_rows": age_rows,
             "multiple_rows": multiple_rows,
         }
@@ -1091,14 +1110,15 @@ class ModuleNormalRangeEditorWindow(QWidget):
 
             elif values["range_mode"] == "gender":
                 gender_rows = [
-                    ("ذكر", values["male_min"], values["male_max"], 0),
-                    ("أنثى", values["female_min"], values["female_max"], 1),
+                    ("ذكر", values["male_min"], values["male_max"], values["male_label"], 0),
+                    ("أنثى", values["female_min"], values["female_max"], values["female_label"], 1),
                 ]
 
-                for gender_value, min_value, max_value, sort_order in gender_rows:
+                for gender_value, min_value, max_value, label_value, sort_order in gender_rows:
                     is_empty = (
                         not min_value
                         and not max_value
+                        and not label_value
                         and not values["unit"]
                         and not values["subject"]
                         and not values["normal_text"]
@@ -1123,7 +1143,7 @@ class ModuleNormalRangeEditorWindow(QWidget):
                             gender_value,
                             None,
                             None,
-                            "",
+                            label_value,
                             min_value,
                             max_value,
                             values["unit"],

@@ -1099,11 +1099,13 @@ def make_pdf_report(
         y -= 0.55 * cm
 
         for r in rows:
-            
 
             test = str(r.get("test_name", "") or "")
             result = str(r.get("result", "") or "")
+            unit = str(r.get("unit", "") or "").strip()
             flag = str(r.get("flag", "") or "").strip()
+
+            result_display = f"{result} {unit}".strip() if unit else result
 
             ranges = r.get("ranges", []) or []
             matched = r.get("matched_range")
@@ -1128,7 +1130,7 @@ def make_pdf_report(
                 c.setFillColorRGB(0, 0, 0)
 
             c.setFont("Helvetica-Bold", 11)
-            c.drawString(X_RESULT, y, result[:22])
+            c.drawString(X_RESULT, y, result_display[:22])
 
             c.setFont("Helvetica-Bold", 11)
             c.drawString(X_FLAG, y, flag)
