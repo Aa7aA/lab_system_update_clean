@@ -58,6 +58,7 @@ from .ui_utils import (
     apply_round_corners,
     print_pdf_and_delete,
     save_pdf_via_dialog,
+    show_blocking_child,
 )
 
 
@@ -754,7 +755,7 @@ class SearchWindow(QMainWindow):
 
         self._opened_windows.append(w)
         w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
-        w.show()
+        show_blocking_child(self, w)
 
 
 
@@ -1351,14 +1352,14 @@ class MainWindow(QMainWindow):
 
     def open_search(self):
         self.search_window = SearchWindow()
-        self.search_window.show()
+        show_blocking_child(self, self.search_window)
 
 
 
     def open_settings(self):
         from .settings_window import SettingsWindow
         self.settings_window = SettingsWindow(parent_main_window=self)
-        self.settings_window.show()
+        show_blocking_child(self, self.settings_window)
 
     def check_for_updates(self):
         manifest_url = "https://aa7aa.github.io/lab_system_update_clean/manifest.json"
@@ -1400,9 +1401,7 @@ class MainWindow(QMainWindow):
 
             if reply == QMessageBox.Yes:
                 self.update_window = UpdateWindow(info=info, parent_main_window=self)
-                self.update_window.show()
-                self.update_window.raise_()
-                self.update_window.activateWindow()
+                show_blocking_child(self, self.update_window)
         else:
             QMessageBox.information(
                 self,
@@ -1464,18 +1463,18 @@ class MainWindow(QMainWindow):
             self._db_tests_win.destroyed.connect(
                 lambda: self._opened_windows.remove(self._db_tests_win) if self._db_tests_win in self._opened_windows else None
             )
-            self._db_tests_win.show()
+            show_blocking_child(self, self._db_tests_win)
             return
 
         if module_code == "Culture":
             from .culture_window import CultureWindow
             self._culture_win = CultureWindow(patient, report_id=report_id)
-            self._culture_win.show()
+            show_blocking_child(self, self._culture_win)
             return
 
         if module_code == "CBC":
             self._cbc_win = CBCWindow(patient, report_id=report_id)
-            self._cbc_win.show()
+            show_blocking_child(self, self._cbc_win)
             return
 
         self._module_win = ModuleWindow(module_code=module_code, patient=patient, report_id=report_id)
@@ -1483,7 +1482,7 @@ class MainWindow(QMainWindow):
         self._module_win.destroyed.connect(
             lambda: self._opened_windows.remove(self._module_win) if self._module_win in self._opened_windows else None
         )
-        self._module_win.show()
+        show_blocking_child(self, self._module_win)
 
 
 

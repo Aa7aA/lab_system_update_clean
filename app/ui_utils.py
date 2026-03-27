@@ -373,7 +373,24 @@ def fit_window_to_screen(
 
 
 
+def show_blocking_child(parent: QWidget | None, child: QWidget) -> QWidget:
+    """
+    Show a child window as a blocking modal window.
 
+    Result:
+    - user cannot go back to older windows until this one is closed
+    - if parent closes, child closes too
+    - child is deleted automatically when closed
+    """
+    if parent is not None:
+        child.setParent(parent, child.windowFlags())
+
+    child.setAttribute(Qt.WA_DeleteOnClose, True)
+    child.setWindowModality(Qt.ApplicationModal)
+    child.show()
+    child.raise_()
+    child.activateWindow()
+    return child
 
 
 

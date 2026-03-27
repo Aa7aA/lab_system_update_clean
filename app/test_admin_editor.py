@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from .db import get_conn
-from .ui_utils import apply_global_theme, fit_window_to_screen
+from .ui_utils import apply_global_theme, fit_window_to_screen, show_blocking_child
 from .branding import LAB_BRANDING
 
 
@@ -310,7 +310,8 @@ class TestAdminModuleSelectorWindow(QWidget):
     def open_module_editor(self, module_code: str):
         w = ModuleTestAdminWindow(module_code, on_tests_changed=self.on_tests_changed)
         self._opened_windows.append(w)
-        w.show()
+        w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
+        show_blocking_child(self, w)
 
 
 class AddCategoryDialog(QDialog):

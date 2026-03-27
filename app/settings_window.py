@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 
-from .ui_utils import apply_global_theme, fit_window_to_screen, apply_round_corners
+from .ui_utils import apply_global_theme, fit_window_to_screen, apply_round_corners, show_blocking_child
 from .branding import LAB_BRANDING
 from .version import APP_VERSION, APP_CHANNEL
 from .lab_identity import get_lab_identity
@@ -280,7 +280,6 @@ class SettingsWindow(QWidget):
 
         w = DoctorManagerWindow()
 
-        # Refresh doctor dropdown in the main window immediately
         if self.parent_main_window is not None:
             w.doctors_changed.connect(self.parent_main_window.load_doctors)
 
@@ -288,7 +287,7 @@ class SettingsWindow(QWidget):
         w.destroyed.connect(
             lambda: self._opened_windows.remove(w) if w in self._opened_windows else None
         )
-        w.show()
+        show_blocking_child(self, w)
 
     def open_normal_range_editor(self):
         from .normal_range_editor import NormalRangeModuleSelectorWindow
@@ -299,7 +298,7 @@ class SettingsWindow(QWidget):
         w = NormalRangeModuleSelectorWindow(on_ranges_changed=callback)
         self._opened_windows.append(w)
         w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
-        w.show()
+        show_blocking_child(self, w)
 
     def open_test_admin_editor(self):
         from .test_admin_editor import TestAdminModuleSelectorWindow
@@ -310,7 +309,7 @@ class SettingsWindow(QWidget):
         w = TestAdminModuleSelectorWindow(on_tests_changed=callback)
         self._opened_windows.append(w)
         w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
-        w.show()
+        show_blocking_child(self, w)
 
     def open_module_admin_editor(self):
         from .module_admin_editor import ModuleAdminEditorWindow
@@ -321,14 +320,14 @@ class SettingsWindow(QWidget):
         w = ModuleAdminEditorWindow(on_modules_changed=callback)
         self._opened_windows.append(w)
         w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
-        w.show()
+        show_blocking_child(self, w)
 
     def open_lab_print_settings(self):
         from .lab_print_settings_window import LabPrintSettingsWindow
         w = LabPrintSettingsWindow()
         self._opened_windows.append(w)
         w.destroyed.connect(lambda: self._opened_windows.remove(w) if w in self._opened_windows else None)
-        w.show()
+        show_blocking_child(self, w)
 
     def export_support_report(self):
         try:
