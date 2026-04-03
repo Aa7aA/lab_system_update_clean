@@ -1000,12 +1000,41 @@ class MainWindow(QMainWindow):
         self.date.setDate(QDate.currentDate())
         self.date.setMinimumHeight(32)
 
+        self.btn_new_patient = QPushButton("مريض جديد")
+        self.btn_new_patient.setMinimumHeight(32)
+        self.btn_new_patient.setCursor(Qt.PointingHandCursor)
+        self.btn_new_patient.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #28415f;
+                border: 1px solid #c6d3e1;
+                border-radius: 12px;
+                padding: 6px 12px;
+                font-size: 13px;
+                font-weight: 700;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #f5f9ff;
+                border: 1px solid #8fc7ff;
+            }
+            QPushButton:pressed {
+                background-color: #eaf3ff;
+            }
+        """)
+        self.btn_new_patient.clicked.connect(self.on_new_patient_clicked)
+
+
+
+
+
         # make inputs look balanced
         self.patient_name.setMinimumWidth(380)
         self.doctor.setMinimumWidth(380)
         self.age.setMinimumWidth(120)
         self.gender.setMinimumWidth(120)
         self.date.setMinimumWidth(130)
+        self.btn_new_patient.setMinimumWidth(140)
 
         # Row 1: patient name
         pgrid.addWidget(make_title("الاسم:"), 0, 0)
@@ -1022,9 +1051,10 @@ class MainWindow(QMainWindow):
         pgrid.addWidget(make_title("العمر:"), 2, 2)
         pgrid.addWidget(self.age, 2, 3)
 
-        # Row 4: date
+        # Row 4: date + new patient button
         pgrid.addWidget(make_title("التاريخ:"), 3, 0)
         pgrid.addWidget(self.date, 3, 1)
+        pgrid.addWidget(self.btn_new_patient, 3, 2, 1, 2)
 
         # stretch so fields stay in proper proportion
         pgrid.setColumnStretch(0, 0)
@@ -1106,6 +1136,10 @@ class MainWindow(QMainWindow):
         av.addWidget(btn_settings)
 
         av.addStretch(1)
+
+
+
+
 
         btn_exit = QPushButton("خروج")
         btn_exit.setMinimumHeight(30)
@@ -1473,9 +1507,24 @@ class MainWindow(QMainWindow):
         self.gender.setCurrentIndex(0)
         self.date.setDate(QDate.currentDate())
 
+    def on_new_patient_clicked(self):
+        reply = QMessageBox.question(
+            self,
+            "مريض جديد",
+            "هل تريد مسح بيانات المريض الحالي والبدء بمريض جديد؟",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self.reset_patient_session()
+
+
+
+
     def _wire_finalize_reset(self, child_window) -> None:
-        if hasattr(child_window, "report_finalized"):
-            child_window.report_finalized.connect(self.reset_patient_session)
+        # Keep report_finalized signal available, but do not auto-clear patient fields.
+        # Patient information should remain until the user changes it manually.
+        return
 
 
 
