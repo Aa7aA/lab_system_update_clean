@@ -213,7 +213,7 @@ class CultureWindow(QMainWindow):
             elif test_name == "Result":
                 self.result = combo
 
-            tg.addWidget(QLabel(f"{test_name}:"), culture_row_index, 0)
+            tg.addWidget(self._make_bold_test_label(f"{test_name}:"), culture_row_index, 0)
             tg.addWidget(combo, culture_row_index, 1)
             culture_row_index += 1
 
@@ -312,7 +312,10 @@ class CultureWindow(QMainWindow):
         return cb
 
 
-
+    def _make_bold_test_label(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet("font-weight: 800; font-size: 14px;")
+        return lbl
 
 
 

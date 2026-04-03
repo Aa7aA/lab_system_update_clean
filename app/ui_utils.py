@@ -912,7 +912,7 @@ def make_pdf_report(
 
     X_TEST = LEFT_X
     X_RESULT = 9.0 * cm
-    X_FLAG = 13.2 * cm
+    X_FLAG = 11.8 * cm
     X_RANGE = RIGHT_X
 
     settings = _get_print_settings()
@@ -941,7 +941,6 @@ def make_pdf_report(
         c.setFont("Helvetica-Bold", 11)
         c.drawString(X_TEST, y, "Test")
         c.drawString(X_RESULT, y, "Result")
-        c.drawString(X_FLAG, y, flag_header)
         c.drawRightString(X_RANGE, y, "Normal Range")
 
         y -= 0.55 * cm
@@ -1104,8 +1103,12 @@ def make_pdf_report(
             result = str(r.get("result", "") or "")
             unit = str(r.get("unit", "") or "").strip()
             flag = str(r.get("flag", "") or "").strip()
+            titer = str(r.get("titer", "") or "").strip()
 
-            result_display = f"{result} {unit}".strip() if unit else result
+            if str(category).strip().lower() == "titers":
+                result_display = result
+            else:
+                result_display = f"{result} {unit}".strip() if unit else result
 
             ranges = r.get("ranges", []) or []
             matched = r.get("matched_range")
@@ -1126,6 +1129,8 @@ def make_pdf_report(
                 c.setFillColorRGB(0.75, 0.0, 0.12)
             elif flag == "L":
                 c.setFillColorRGB(0.04, 0.34, 0.82)
+            elif flag == "N":
+                c.setFillColorRGB(0.00, 0.55, 0.20)
             else:
                 c.setFillColorRGB(0, 0, 0)
 
@@ -1133,7 +1138,22 @@ def make_pdf_report(
             c.drawString(X_RESULT, y, result_display[:22])
 
             c.setFont("Helvetica-Bold", 11)
-            c.drawString(X_FLAG, y, flag)
+
+            if str(category).strip().lower() == "titers":
+                titer_unit = str(r.get("unit", "") or "").strip()
+
+                titer_display = titer
+                if titer and titer_unit:
+                    titer_display = f"{titer} {titer_unit}"
+
+                if titer_display and flag:
+                    third_col_value = f"{titer_display} {flag}"
+                else:
+                    third_col_value = titer_display or flag
+            else:
+                third_col_value = flag
+
+            c.drawString(X_FLAG, y, third_col_value)
 
             first = True
 

@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QScrollArea,
 )
-from PySide6.QtCore import Qt, QPoint, Signal
+from PySide6.QtCore import Qt, QPoint, Signal, QSignalBlocker
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtCore import Qt
 
@@ -228,6 +228,11 @@ class TestsWindow(QWidget):
         widget.setGraphicsEffect(shadow)
 
 
+    def _make_bold_test_label(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet("font-weight: 800; font-size: 14px;")
+        return lbl
+
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -384,6 +389,138 @@ class TestsWindow(QWidget):
             return None
 
 
+    def _format_formula_value(self, value: float) -> str:
+        rounded = round(value, 2)
+        if float(rounded).is_integer():
+            return str(int(rounded))
+        return f"{rounded:.2f}".rstrip("0").rstrip(".")
+
+
+    def _wire_lipid_profile_formulas(self) -> None:
+        widgets = self.inputs_by_category.get("Lipid Profile", {})
+
+        cholesterol = widgets.get("S.Cholesterol")
+        triglyceride = widgets.get("S.Triglyceride")
+        hdl = widgets.get("S.HDL")
+        ldl = widgets.get("S.LDL")
+        vldl = widgets.get("S.VLDL")
+
+        if not all(isinstance(w, QLineEdit) for w in [cholesterol, triglyceride, hdl, ldl, vldl]):
+            return
+
+        # calculated fields should not be manually edited
+        vldl.setReadOnly(True)
+        ldl.setReadOnly(True)
+
+        def recalc():
+            chol_val = self._parse_float(cholesterol.text())
+            tri_val = self._parse_float(triglyceride.text())
+            hdl_val = self._parse_float(hdl.text())
+
+            with QSignalBlocker(vldl), QSignalBlocker(ldl):
+                if tri_val is None:
+                    vldl.clear()
+                else:
+                    vldl.setText(self._format_formula_value(tri_val / 5.0))
+
+                vldl_val = self._parse_float(vldl.text())
+
+                if chol_val is None or hdl_val is None or vldl_val is None:
+                    ldl.clear()
+                else:
+                    ldl.setText(self._format_formula_value(chol_val - hdl_val - vldl_val))
+
+            # refresh flags/colors for calculated fields too
+            for test_name, widget in (("S.VLDL", vldl), ("S.LDL", ldl)):
+                flag_lbl = self.flags_by_test.get(test_name)
+                if flag_lbl:
+                    self._update_one_flag("Lipid Profile", test_name, widget, flag_lbl)
+
+        triglyceride.textChanged.connect(recalc)
+        cholesterol.textChanged.connect(recalc)
+        hdl.textChanged.connect(recalc)
+
+        recalc()
+
+
+    def _wire_hematology_formulas(self) -> None:
+        widgets = self.inputs_by_category.get("Hematology test", {})
+
+        hb = widgets.get("Hb")
+        hb_percent = widgets.get("Hb%")
+        pcv = widgets.get("P.C.V")
+
+        if not all(isinstance(w, QLineEdit) for w in [hb, hb_percent, pcv]):
+            return
+
+        # calculated fields should not be manually edited
+        hb.setReadOnly(True)
+        hb_percent.setReadOnly(True)
+
+        def recalc():
+            pcv_val = self._parse_float(pcv.text())
+
+            with QSignalBlocker(hb), QSignalBlocker(hb_percent):
+                if pcv_val is None:
+                    hb.clear()
+                    hb_percent.clear()
+                else:
+                    hb.setText(self._format_formula_value(pcv_val / 3.125))
+                    hb_percent.setText(self._format_formula_value(pcv_val * 2.0))
+
+            # refresh flags/colors for calculated fields too
+            for test_name, widget in (("Hb", hb), ("Hb%", hb_percent)):
+                flag_lbl = self.flags_by_test.get(test_name)
+                if flag_lbl:
+                    self._update_one_flag("Hematology test", test_name, widget, flag_lbl)
+
+        pcv.textChanged.connect(recalc)
+
+        recalc()
+
+
+
+
+    def _wire_urea_formula(self) -> None:
+        widgets = self.inputs_by_category.get("Chemical test", {})
+
+        urea = widgets.get("B.Urea")
+
+        if not isinstance(urea, QLineEdit):
+            return
+
+        def recalc():
+            text = urea.text().strip()
+
+            value = self._parse_float(text)
+            if value is None:
+                return
+
+            # prevent re-processing already converted value
+            if hasattr(urea, "_converted") and urea._converted:
+                return
+
+            with QSignalBlocker(urea):
+                new_val = value * 2.14
+                urea.setText(self._format_formula_value(new_val))
+                urea._converted = True  # mark as converted
+
+            # update flag color
+            flag_lbl = self.flags_by_test.get("B.Urea")
+            if flag_lbl:
+                self._update_one_flag("Chemical test", "B.Urea", urea, flag_lbl)
+
+        def on_edit():
+            # reset conversion when user edits manually
+            urea._converted = False
+
+        urea.textEdited.connect(on_edit)
+        urea.editingFinished.connect(recalc)
+
+
+
+
+
 
 
     def _patient_gender(self) -> str:
@@ -531,6 +668,16 @@ class TestsWindow(QWidget):
                 border: 1px solid #f0a3a3;
                 border-radius: 10px;
             """)
+        else:
+            flag_lbl.setText("N")
+            flag_lbl.setStyleSheet("font-weight: 900; font-size: 14px; color: #178a45;")
+            edit.setStyleSheet("""
+                background-color: #eefaf1;
+                color: #146c37;
+                font-weight: 700;
+                border: 1px solid #8fd1a6;
+                border-radius: 10px;
+            """)
 
 
 
@@ -552,7 +699,6 @@ class TestsWindow(QWidget):
             if not flag_lbl:
                 continue
 
-            # Flags only apply to numeric text inputs, not dropdowns
             if not isinstance(widget, QLineEdit):
                 flag_lbl.setText("")
                 widget.setStyleSheet("")
@@ -610,25 +756,32 @@ class TestsWindow(QWidget):
 
                     matched = self._matching_range_row(cat_name, test_name)
 
+                    # If this is a Titers helper field like "Anti CCP__titer",
+                    # evaluate range/flag using the base test name.
+                    effective_test_name = test_name[:-7] if test_name.endswith("__titer") else test_name
+                    effective_matched = self._matching_range_row(cat_name, effective_test_name)
+
                     unit = ""
                     flag = ""
 
-                    if isinstance(widget, QLineEdit) and matched:
-                        mode = str(matched.get("range_mode", "none") or "none").strip()
-                        normal_text = str(matched.get("normal_text", "") or "").strip()
+                    if isinstance(widget, QLineEdit) and effective_matched:
+                        mode = str(effective_matched.get("range_mode", "none") or "none").strip()
+                        normal_text = str(effective_matched.get("normal_text", "") or "").strip()
 
-                        if mode != "multiple" and not normal_text:
-                            unit = str(matched.get("unit", "") or "").strip()
+                        if not normal_text:
+                            unit = str(effective_matched.get("unit", "") or "").strip()
 
                             val = self._parse_float(value)
-                            mn = self._parse_float(matched.get("min", ""))
-                            mx = self._parse_float(matched.get("max", ""))
+                            mn = self._parse_float(effective_matched.get("min", ""))
+                            mx = self._parse_float(effective_matched.get("max", ""))
 
                             if val is not None and mn is not None and mx is not None:
                                 if val < mn:
                                     flag = "L"
                                 elif val > mx:
                                     flag = "H"
+                                else:
+                                    flag = "N"
 
                     conn.execute(
                         """
@@ -665,9 +818,21 @@ class TestsWindow(QWidget):
                     COALESCE(rr.unit, '') AS unit,
                     COALESCE(rr.flag, '') AS flag
                 FROM report_results rr
+                LEFT JOIN categories c
+                    ON c.module_code = 'Tests'
+                AND c.name = rr.category
+                LEFT JOIN tests t
+                    ON t.module_code = 'Tests'
+                AND t.category_name = rr.category
+                AND t.test_name = rr.test_name
                 WHERE rr.report_id = ? AND rr.module = 'Tests'
                 AND TRIM(COALESCE(rr.result, '')) <> ''
-                ORDER BY rr.category, rr.test_name
+                ORDER BY
+                    COALESCE(c.sort_order, 999999),
+                    rr.category,
+                    COALESCE(t.sort_order, 999999),
+                    COALESCE(t.pos, 999999),
+                    rr.test_name
                 """,
                 (self.report_id,),
             ).fetchall()
@@ -678,8 +843,11 @@ class TestsWindow(QWidget):
             category = str(r["category"] or "")
             test_name = str(r["test_name"] or "")
 
-            all_ranges = self._range_rows(category, test_name)
-            matched = self._matching_range_row(category, test_name)
+            # Use base test for titer rows
+            effective_test_name = test_name[:-7] if test_name.endswith("__titer") else test_name
+
+            all_ranges = self._range_rows(category, effective_test_name)
+            matched = self._matching_range_row(category, effective_test_name)
 
             out.append(
                 {
@@ -722,12 +890,14 @@ class TestsWindow(QWidget):
             if not titer_row:
                 continue
 
-            # put titer value into the 3rd printed column
-            base_row["flag"] = str(titer_row.get("result", "") or "")
+            # keep the real H/L/N flag from the titer row separately
+            base_row["titer"] = str(titer_row.get("result", "") or "")
+            base_row["flag"] = str(titer_row.get("flag", "") or "")
+            base_row["unit"] = str(titer_row.get("unit", "") or "")
 
-            # use titer ranges for Normal Range, just like Torch
-            base_row["ranges"] = titer_row.get("ranges", []) or []
-            base_row["matched_range"] = titer_row.get("matched_range")
+            # use the base test's range for Normal Range
+            # because normal_ranges are defined on the visible test name, not "__titer"
+            # so leave base_row["ranges"] and base_row["matched_range"] as they already are
 
         return merged
 
@@ -1092,20 +1262,24 @@ class TestsWindow(QWidget):
                     for test_id, val in opt_rows:
                         options_by_test_id[int(test_id)].append(val)
 
-                for test_id, test_name, input_type, unit_default, col, pos, sort_order in tests:
-                    if input_type == "dropdown":
-                        w = QComboBox()
-                        w.setEditable(True)
-                        w.setInsertPolicy(QComboBox.NoInsert)
-                        w.addItem("")
-                        for opt in options_by_test_id.get(int(test_id), []):
-                            w.addItem(str(opt))
-                        w.setCurrentText(existing.get((cat_name, test_name), ""))
-                    else:
-                        w = QLineEdit()
-                        w.setText(existing.get((cat_name, test_name), ""))
+                    for test_id, test_name, input_type, unit_default, col, pos, sort_order in tests:
+                        if input_type == "dropdown":
+                            w = QComboBox()
+                            w.setEditable(True)
+                            w.setInsertPolicy(QComboBox.NoInsert)
+                            w.addItem("")
+                            for opt in options_by_test_id.get(int(test_id), []):
+                                w.addItem(str(opt))
+                            w.setCurrentText(existing.get((cat_name, test_name), ""))
+                        else:
+                            w = QLineEdit()
+                            w.setText(existing.get((cat_name, test_name), ""))
 
-                    form.addRow(QLabel(test_name), w)
-                    self.inputs_by_category[cat_name][test_name] = w
+                        form.addRow(self._make_bold_test_label(test_name), w)
+                        self.inputs_by_category[cat_name][test_name] = w
 
                 self.tabs.addTab(page, cat_name)
+
+        self._wire_lipid_profile_formulas()
+        self._wire_hematology_formulas()
+        self._wire_urea_formula()

@@ -237,7 +237,7 @@ class ModuleWindow(QWidget):
         self._registry: list[tuple[str, str, Any, str]] = []
 
         self.build_tabs_from_db()
-
+        
 
     def add_soft_shadow(self, widget, blur=28, x=0, y=6, alpha=30):
         shadow = QGraphicsDropShadowEffect(self)
@@ -246,6 +246,10 @@ class ModuleWindow(QWidget):
         shadow.setColor(QColor(31, 59, 87, alpha))
         widget.setGraphicsEffect(shadow)
 
+    def _make_bold_test_label(self, text: str) -> QLabel:
+        lbl = QLabel(text)
+        lbl.setStyleSheet("font-weight: 800; font-size: 14px;")
+        return lbl
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -452,9 +456,21 @@ class ModuleWindow(QWidget):
                     COALESCE(rr.unit, '') AS unit,
                     COALESCE(rr.flag, '') AS flag
                 FROM report_results rr
+                LEFT JOIN categories c
+                    ON c.module_code = rr.module
+                AND c.name = rr.category
+                LEFT JOIN tests t
+                    ON t.module_code = rr.module
+                AND t.category_name = rr.category
+                AND t.test_name = rr.test_name
                 WHERE rr.report_id = ? AND rr.module = ?
                 AND TRIM(COALESCE(rr.result, '')) <> ''
-                ORDER BY rr.category, rr.test_name
+                ORDER BY
+                    COALESCE(c.sort_order, 999999),
+                    rr.category,
+                    COALESCE(t.sort_order, 999999),
+                    COALESCE(t.pos, 999999),
+                    rr.test_name
                 """,
                 (self.report_id, self.module_code),
             ).fetchall()
@@ -741,7 +757,7 @@ class ModuleWindow(QWidget):
             return "L"
         if v > mx:
             return "H"
-        return ""
+        return "N"
 
     def _update_one_flag(self, category_name: str, test_name: str, edit: QLineEdit, flag_lbl: QLabel) -> None:
         matched = self._matching_range_row(category_name, test_name)
@@ -765,6 +781,7 @@ class ModuleWindow(QWidget):
             return
 
         flag = self._calc_flag(category_name, test_name, txt)
+
         if flag == "L":
             flag_lbl.setText("L")
             flag_lbl.setStyleSheet("font-weight: 900; font-size: 14px; color: #1d6fe8;")
@@ -783,6 +800,16 @@ class ModuleWindow(QWidget):
                 color: #9a1f1f;
                 font-weight: 700;
                 border: 1px solid #f0a3a3;
+                border-radius: 10px;
+            """)
+        elif flag == "N":
+            flag_lbl.setText("N")
+            flag_lbl.setStyleSheet("font-weight: 900; font-size: 14px; color: #178a45;")
+            edit.setStyleSheet("""
+                background-color: #eefaf1;
+                color: #146c37;
+                font-weight: 700;
+                border: 1px solid #8fd1a6;
                 border-radius: 10px;
             """)
 
@@ -1016,7 +1043,10 @@ class ModuleWindow(QWidget):
                     cb.setCurrentText(saved_value)
                 elif title == "Physically Examination" and cb.count() > 1:
                     cb.setCurrentIndex(1)
-                form.addRow(QLabel(pretty_label(test_name)), cb)
+                elif title == "Microscopical Examination" and norm(test_name) in {"casts", "bacteria", "epith_cell", "other_1"} and cb.count() > 1:
+                    cb.setCurrentIndex(1)
+
+                form.addRow(self._make_bold_test_label(pretty_label(test_name)), cb)
                 widgets.append((test_name, cb))
 
             form.addRow(QLabel(""), QLabel(""))
@@ -1475,18 +1505,18 @@ class ModuleWindow(QWidget):
                     for opt in options_by_id.get(tid, []):
                         cb.addItem(opt)
                     cb.setCurrentText(existing.get((cat_name, test_name), ""))
-                    form.addRow(QLabel(test_name), cb)
+                    form.addRow(self._make_bold_test_label(test_name), cb)
                     self._registry.append((cat_name, test_name, cb, ""))
                 elif itype == "textarea":
                     te = QTextEdit()
                     te.setMinimumHeight(120)
                     te.setPlainText(existing.get((cat_name, test_name), ""))
-                    form.addRow(QLabel(test_name), te)
+                    form.addRow(self._make_bold_test_label(test_name), te)
                     self._registry.append((cat_name, test_name, te, ""))
                 else:
                     ed = QLineEdit()
                     ed.setText(existing.get((cat_name, test_name), ""))
-                    form.addRow(QLabel(test_name), ed)
+                    form.addRow(self._make_bold_test_label(test_name), ed)
                     self._registry.append((cat_name, test_name, ed, unit or ""))
 
             self.tabs.addTab(tab, cat_name)

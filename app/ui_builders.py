@@ -31,6 +31,10 @@ def _make_range_label() -> QLabel:
     lbl.setStyleSheet("color: #555;")
     return lbl
 
+def _make_test_name_label(text: str) -> QLabel:
+    lbl = QLabel(text)
+    lbl.setStyleSheet("font-weight: 800; font-size: 14px;")
+    return lbl
 
 def _add_combo_items(cb: QComboBox, options: list[str], ensure_empty: bool = True) -> None:
     # Normalize so empty choice appears once at the top
@@ -61,7 +65,7 @@ def _build_flagged_rows_grid(
     ranges: dict[str, QLabel] = {}
 
     for r, test_name in enumerate(test_names):
-        lbl = QLabel(f"{test_name} :")
+        lbl = _make_test_name_label(f"{test_name} :")
         lbl.setMinimumWidth(78)
 
         edit = QLineEdit()
@@ -114,7 +118,7 @@ def _build_mixed_rows_grid(
     ranges: dict[str, QLabel] = {}
 
     for r, (test_name, input_type, options) in enumerate(test_defs):
-        lbl = QLabel(f"{test_name} :")
+        lbl = _make_test_name_label(f"{test_name} :")
         lbl.setMinimumWidth(78)
 
         if (input_type or "").strip() == "dropdown":
@@ -397,7 +401,7 @@ def build_dropdown_pairs(
         cb.setEditable(editable)
         _add_combo_items(cb, options, ensure_empty=True)
         inputs[name] = cb
-        form.addRow(name, cb)
+        form.addRow(_make_test_name_label(name), cb)
 
     outer.addWidget(box)
     return tab, inputs
@@ -434,7 +438,7 @@ def build_two_panel_dropdowns(
             cb.setEditable(editable)
             _add_combo_items(cb, options, ensure_empty=True)
             inputs[name] = cb
-            form.addRow(name, cb)
+            form.addRow(_make_test_name_label(name), cb)
         return box, inputs
 
     b1, i1 = make_panel(left_pairs, left_title)
@@ -497,7 +501,7 @@ def build_two_panel_dropdowns_with_titer(
             row_lay.addWidget(cb, 1)
             row_lay.addWidget(t, 0)
 
-            form.addRow(QLabel(test_name), row)
+            form.addRow(_make_test_name_label(test_name), row)
 
             results[test_name] = cb
             titers[test_name] = t
@@ -600,7 +604,7 @@ def build_widal_test_table(
 
     # Data rows start from row=1
     for r, name in enumerate(rows, start=1):
-        lab = QLabel(name)
+        lab = _make_test_name_label(name)
         lab.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
 
         cb_o = make_combo()
@@ -654,7 +658,7 @@ def build_two_panel_keylabel_dropdowns(
             cb.setEditable(editable)
             _add_combo_items(cb, options, ensure_empty=True)
             inputs[key] = cb
-            form.addRow(label, cb)
+            form.addRow(_make_test_name_label(label), cb)
         return box, inputs
 
     b1, i1 = make_panel(left_items, left_title)
@@ -689,7 +693,7 @@ def build_antibiotics_table(antibiotics: list[str]) -> tuple[QWidget, dict[str, 
     opts = ["", "S", "I", "R"]
 
     for i, ab in enumerate(antibiotics, start=1):
-        lbl = QLabel(ab)
+        lbl = _make_test_name_label(ab)
         combo = QComboBox()
         combo.addItems(opts)
         combo.setMinimumWidth(120)
@@ -718,7 +722,7 @@ def build_antibiotics_table_from_db(
     grid.addWidget(QLabel("S / I / R"), 0, 1)
 
     for r, (name, opts) in enumerate(pairs, start=1):
-        lab = QLabel(name)
+        lab = _make_test_name_label(name)
         lab.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         combo = QComboBox()
@@ -778,7 +782,7 @@ def build_antibiotics_table_three_columns(
         grid.addWidget(h2, 0, 1)
 
         for r, name in enumerate(items, start=1):
-            lab = QLabel(name)
+            lab = _make_test_name_label(name)
             cb = QComboBox()
             cb.setEditable(False)
             cb.addItems(options)
@@ -843,7 +847,7 @@ def build_torch_two_panel_dropdowns(
                 row += 1
                 continue
 
-            lab = QLabel(name)
+            lab = _make_test_name_label(name)
 
             cb = QComboBox()
             cb.setEditable(True)

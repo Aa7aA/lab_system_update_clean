@@ -810,10 +810,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Lab")
         fit_window_to_screen(
             self,
-            width_ratio=0.94,
-            height_ratio=0.9,
-            min_width=1100,
-            min_height=620,
+            width_ratio=0.96,
+            height_ratio=0.96,
+            min_width=1180,
+            min_height=700,
         )
         apply_round_corners(self, 15)
 
@@ -844,8 +844,8 @@ class MainWindow(QMainWindow):
         root.setObjectName("AppShell")
 
         root_layout = QVBoxLayout(root)
-        root_layout.setContentsMargins(10, 10, 10, 10)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+        root_layout.setSpacing(6)
 
         scroll.setWidget(root)
 
@@ -853,11 +853,11 @@ class MainWindow(QMainWindow):
         # ---------------- Custom Header ----------------
         header = QFrame()
         header.setObjectName("HeaderBar")
-        header.setFixedHeight(88)
+        header.setFixedHeight(72)
 
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(18, 10, 18, 10)
-        header_layout.setSpacing(14)
+        header_layout.setContentsMargins(14, 8, 14, 8)
+        header_layout.setSpacing(10)
         header_layout.setAlignment(Qt.AlignVCenter)
 
 
@@ -936,14 +936,15 @@ class MainWindow(QMainWindow):
 
         # ---------------- Top (logo + patient info) ----------------
         top_row = QHBoxLayout()
-        top_row.setSpacing(16)
+        top_row.setSpacing(10)
 
         logo_box = self.make_box_frame()
         logo_layout = QVBoxLayout(logo_box)
-        logo_layout.setContentsMargins(10, 10, 10, 10)
+        logo_layout.setContentsMargins(6, 6, 6, 6)
         logo = QLabel()
         logo.setAlignment(Qt.AlignCenter)
-        logo.setMinimumSize(280, 120)  # keeps the box size stable
+        logo.setMinimumSize(220, 90)
+        logo.setMaximumHeight(240)
 
         logo_path = Path(LAB_BRANDING["logo_path"])
 
@@ -973,38 +974,38 @@ class MainWindow(QMainWindow):
         )
 
         pgrid = QGridLayout(patient_box)
-        pgrid.setContentsMargins(14, 18, 14, 14)
-        pgrid.setHorizontalSpacing(16)
-        pgrid.setVerticalSpacing(14)
+        pgrid.setContentsMargins(10, 12, 10, 10)
+        pgrid.setHorizontalSpacing(12)
+        pgrid.setVerticalSpacing(8)
 
         self.patient_name = QLineEdit()
         self.patient_name.setPlaceholderText("اسم المريض")
-        self.patient_name.setMinimumHeight(38)
+        self.patient_name.setMinimumHeight(32)
 
         self.doctor = QComboBox()
-        self.doctor.setMinimumHeight(38)
+        self.doctor.setMinimumHeight(32)
 
         self.age = QSpinBox()
         self.age.setRange(0, 120)
         self.age.setValue(0)
-        self.age.setMinimumHeight(38)
+        self.age.setMinimumHeight(32)
         self.age.setButtonSymbols(QSpinBox.UpDownArrows)
 
         self.gender = QComboBox()
         self.gender.addItems(["", "ذكر", "أنثى"])
-        self.gender.setMinimumHeight(38)
+        self.gender.setMinimumHeight(32)
 
         self.date = QDateEdit()
         self.date.setCalendarPopup(True)
         self.date.setDate(QDate.currentDate())
-        self.date.setMinimumHeight(38)
+        self.date.setMinimumHeight(32)
 
         # make inputs look balanced
-        self.patient_name.setMinimumWidth(460)
-        self.doctor.setMinimumWidth(460)
-        self.age.setMinimumWidth(150)
-        self.gender.setMinimumWidth(150)
-        self.date.setMinimumWidth(150)
+        self.patient_name.setMinimumWidth(380)
+        self.doctor.setMinimumWidth(380)
+        self.age.setMinimumWidth(120)
+        self.gender.setMinimumWidth(120)
+        self.date.setMinimumWidth(130)
 
         # Row 1: patient name
         pgrid.addWidget(make_title("الاسم:"), 0, 0)
@@ -1037,7 +1038,7 @@ class MainWindow(QMainWindow):
 
         # ---------------- Middle (modules + tools) ----------------
         mid = QHBoxLayout()
-        mid.setSpacing(16)
+        mid.setSpacing(10)
 
         self.modules_box = QGroupBox("تحاليل المختبر")
         self.modules_box.setLayoutDirection(Qt.RightToLeft)
@@ -1059,9 +1060,9 @@ class MainWindow(QMainWindow):
             }
         """)
         self.modules_grid = QGridLayout(self.modules_box)
-        self.modules_grid.setContentsMargins(18, 22, 18, 18)
-        self.modules_grid.setHorizontalSpacing(14)
-        self.modules_grid.setVerticalSpacing(14)
+        self.modules_grid.setContentsMargins(12, 14, 12, 12)
+        self.modules_grid.setHorizontalSpacing(10)
+        self.modules_grid.setVerticalSpacing(10)
 
         self.module_buttons = []
         self.refresh_module_buttons()
@@ -1107,7 +1108,8 @@ class MainWindow(QMainWindow):
         av.addStretch(1)
 
         btn_exit = QPushButton("خروج")
-        btn_exit.setMinimumHeight(34)
+        btn_exit.setMinimumHeight(30)
+        btn_exit.setMaximumHeight(34)
         btn_exit.setCursor(Qt.PointingHandCursor)
         btn_exit.setStyleSheet("""
             QPushButton {
@@ -1115,8 +1117,8 @@ class MainWindow(QMainWindow):
                 color: #b3262e;
                 border: 1px solid #e7b7bb;
                 border-radius: 16px;
-                padding: 12px 14px;
-                font-size: 14px;
+                padding: 8px 10px;
+                font-size: 13px;
                 font-weight: 700;
                 text-align: center;
             }
@@ -1170,7 +1172,8 @@ class MainWindow(QMainWindow):
         btn = QPushButton(text)
         btn.setLayoutDirection(Qt.LeftToRight)
         btn.setText(text)
-        btn.setMinimumHeight(64)
+        btn.setMinimumHeight(50)
+        btn.setMaximumHeight(54)
         btn.setCursor(Qt.PointingHandCursor)
 
         btn.setStyleSheet("""
@@ -1179,8 +1182,8 @@ class MainWindow(QMainWindow):
                 color: #16324f;
                 border: 1px solid #c6d3e1;
                 border-radius: 20px;
-                padding: 14px;
-                font-size: 17px;
+                padding: 8px 10px;
+                font-size: 15px;
                 font-weight: 800;
             }
 
@@ -1199,7 +1202,8 @@ class MainWindow(QMainWindow):
 
     def make_tool_button(self, text: str) -> QPushButton:
         btn = QPushButton(text)
-        btn.setMinimumHeight(34)
+        btn.setMinimumHeight(30)
+        btn.setMaximumHeight(34)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet("""
             QPushButton {
@@ -1207,8 +1211,8 @@ class MainWindow(QMainWindow):
                 color: #28415f;
                 border: 1px solid #c6d3e1;
                 border-radius: 16px;
-                padding: 12px 14px;
-                font-size: 14px;
+                padding: 8px 10px;
+                font-size: 13px;
                 font-weight: 700;
                 text-align: center;
             }
@@ -1281,7 +1285,7 @@ class MainWindow(QMainWindow):
             self.module_buttons.append(btn)
 
             c += 1
-            if c == 3:
+            if c == 4:
                 c = 0
                 r += 1
 
