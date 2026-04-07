@@ -1508,14 +1508,7 @@ class MainWindow(QMainWindow):
         self.date.setDate(QDate.currentDate())
 
     def on_new_patient_clicked(self):
-        reply = QMessageBox.question(
-            self,
-            "مريض جديد",
-            "هل تريد مسح بيانات المريض الحالي والبدء بمريض جديد؟",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
+       
             self.reset_patient_session()
 
 

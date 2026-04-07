@@ -929,7 +929,7 @@ class TestsWindow(QWidget):
             print_pdf(pdf_path)
             self._report_finalized = True
 
-            QMessageBox.information(self, "الطباعة", "تم إرسال التقرير إلى الطابعة.")
+     
         except Exception as e:
             QMessageBox.warning(self, "خطأ في الطباعة", f"فشلت عملية الطباعة:\n{e}")
 
