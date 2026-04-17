@@ -417,7 +417,14 @@ def _safe_filename(name: str) -> str:
 
 
 def _pdf_tests_folder() -> Path:
-    desktop = Path.home() / "Desktop"
+    user_profile = os.environ.get("USERPROFILE")
+    if user_profile:
+        desktop = Path(user_profile) / "Desktop"
+    else:
+        desktop = Path.home() / "Desktop"
+
+    desktop.mkdir(parents=True, exist_ok=True)
+
     folder = desktop / "PDF Tests"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
