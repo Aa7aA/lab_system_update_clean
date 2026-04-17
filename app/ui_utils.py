@@ -976,8 +976,8 @@ def make_pdf_report(
     RIGHT_X = width - 2.0 * cm
 
     X_TEST = LEFT_X
-    X_RESULT = 9.0 * cm
-    X_FLAG = 11.8 * cm
+    X_RESULT = 8.4 * cm
+    X_FLAG = 10.0 * cm
     X_RANGE = RIGHT_X
 
     settings = _get_print_settings()
@@ -1056,7 +1056,7 @@ def make_pdf_report(
 
             # extra lines if multiple ranges are printed
             if range_count > 1:
-                row_height += (range_count - 1) * 0.40 * cm
+                row_height += (range_count - 1) * 0.58 * cm
 
             # extra spacing for TORCH grouped rows
             if str(category).upper() == "TORCH" and str(r.get("test_name", "") or "") in {
@@ -1227,7 +1227,7 @@ def make_pdf_report(
                     ry = y
                     first = False
                 else:
-                    ry = y - 0.40 * cm
+                    ry = y - 0.56 * cm
                     y = ry
 
                 if is_match:
@@ -1249,23 +1249,23 @@ def make_pdf_report(
 
                 # draw numeric/text range value at the far right
                 c.setFont(range_font_name, range_font_size)
-                c.drawRightString(X_RANGE, ry, value_txt[:24])
+                c.drawRightString(X_RANGE, ry, value_txt[:50])
 
                 # draw label separately to the left of the value
                 if label_txt:
                     value_width = pdfmetrics.stringWidth(
-                        value_txt[:24],
+                        value_txt[:50],
                         range_font_name,
                         10,
                     )
-                    label_right_x = X_RANGE - value_width - 0.18 * cm
+                    label_right_x = X_RANGE - value_width - 0.35 * cm
 
                     if has_arabic(label_txt):
                         c.setFont(arabic_font, range_font_size)
                         c.drawRightString(label_right_x, ry, _ar(label_txt + " :"))
                     else:
                         c.setFont(range_font_name, range_font_size)
-                        c.drawRightString(label_right_x, ry, (label_txt + ":")[:14])
+                        c.drawRightString(label_right_x, ry, label_txt + ":")
 
             # separator line under current row
             y_line = y - 0.28 * cm

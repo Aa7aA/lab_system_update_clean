@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import os
 import win32event
 import win32api
 import winerror
@@ -10,11 +11,10 @@ from uuid import uuid4
 
 
 
-
 from PySide6.QtGui import QPixmap, QAction, QColor
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QDate, QPoint, Signal
+from PySide6.QtCore import Qt, QDate, QPoint, Signal, QEasingCurve, QPropertyAnimation
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QGraphicsDropShadowEffect,
     QScrollArea,
+    QButtonGroup,
 )
 
 from .db import get_conn, init_db, get_lab_setting, set_lab_setting
@@ -997,9 +998,31 @@ class MainWindow(QMainWindow):
         self.age.setMinimumHeight(32)
         self.age.setButtonSymbols(QSpinBox.UpDownArrows)
 
-        self.gender = QComboBox()
-        self.gender.addItems(["", "ذكر", "أنثى"])
-        self.gender.setMinimumHeight(32)
+        self.selected_gender = ""
+
+        self.gender_cards_widget = QWidget()
+        self.gender_cards_layout = QHBoxLayout(self.gender_cards_widget)
+        self.gender_cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.gender_cards_layout.setSpacing(8)
+
+        self.btn_gender_male = QPushButton(self._gender_button_text("ذكر", False))
+        self.btn_gender_male.setMinimumHeight(32)
+        self.btn_gender_male.setCursor(Qt.PointingHandCursor)
+        self.btn_gender_male.setCheckable(False)
+
+        self.btn_gender_female = QPushButton(self._gender_button_text("أنثى", False))
+        self.btn_gender_female.setMinimumHeight(32)
+        self.btn_gender_female.setCursor(Qt.PointingHandCursor)
+        self.btn_gender_female.setCheckable(False)
+
+        self.btn_gender_male.setStyleSheet(self._gender_card_style(False))
+        self.btn_gender_female.setStyleSheet(self._gender_card_style(False))
+
+        self.btn_gender_male.clicked.connect(lambda: self._set_gender_selection("ذكر"))
+        self.btn_gender_female.clicked.connect(lambda: self._set_gender_selection("أنثى"))
+
+        self.gender_cards_layout.addWidget(self.btn_gender_male)
+        self.gender_cards_layout.addWidget(self.btn_gender_female)
 
         self.date = QDateEdit()
         self.date.setCalendarPopup(True)
@@ -1038,7 +1061,7 @@ class MainWindow(QMainWindow):
         self.patient_name.setMinimumWidth(380)
         self.doctor.setMinimumWidth(380)
         self.age.setMinimumWidth(120)
-        self.gender.setMinimumWidth(120)
+        self.gender_cards_widget.setMinimumWidth(220)
         self.date.setMinimumWidth(130)
         self.btn_new_patient.setMinimumWidth(140)
 
@@ -1052,7 +1075,7 @@ class MainWindow(QMainWindow):
 
         # Row 3: gender + age
         pgrid.addWidget(make_title("الجنس:"), 2, 0)
-        pgrid.addWidget(self.gender, 2, 1)
+        pgrid.addWidget(self.gender_cards_widget, 2, 1)
 
         pgrid.addWidget(make_title("العمر:"), 2, 2)
         pgrid.addWidget(self.age, 2, 3)
@@ -1268,7 +1291,96 @@ class MainWindow(QMainWindow):
 
 
 
+    def _gender_card_style(self, selected: bool, gender: str = "") -> str:
+        if selected:
+            if gender == "ذكر":
+                bg = "#d6e7ff"   # light blue
+                border = "#3a7afe"
+                color = "#16324f"
+            elif gender == "أنثى":
+                bg = "#ffd6df"   # light pink
+                border = "#ff4d6d"
+                color = "#5a1a2b"
+            else:
+                bg = "#eaf3ff"
+                border = "#3a7afe"
+                color = "#16324f"
 
+            return f"""
+                QPushButton {{
+                    background-color: {bg};
+                    color: {color};
+                    border: 2px solid {border};
+                    border-radius: 14px;
+                    padding: 8px 10px;
+                    font-size: 14px;
+                    font-weight: 800;
+                    text-align: center;
+                }}
+            """
+
+        return """
+            QPushButton {
+                background-color: #ffffff;
+                color: #28415f;
+                border: 1px solid #c6d3e1;
+                border-radius: 14px;
+                padding: 8px 10px;
+                font-size: 14px;
+                font-weight: 700;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #f5f9ff;
+                border: 1px solid #8fc7ff;
+            }
+            QPushButton:pressed {
+                background-color: #eaf3ff;
+            }
+        """
+
+
+    def _gender_button_text(self, value: str, selected: bool) -> str:
+        if value == "ذكر":
+            return "♂  ذكر" if selected else "ذكر"
+        if value == "أنثى":
+            return "♀  أنثى" if selected else "أنثى"
+        return value
+
+
+
+    def _animate_gender_button(self, btn: QPushButton):
+        anim = QPropertyAnimation(btn, b"geometry", self)
+        rect = btn.geometry()
+        anim.setDuration(140)
+        anim.setStartValue(rect)
+        anim.setKeyValueAt(0.5, rect.adjusted(-3, -3, 3, 3))
+        anim.setEndValue(rect)
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        anim.start()
+        self._gender_anim = anim
+
+
+    def _set_gender_selection(self, value: str):
+        self.selected_gender = value
+
+        male_selected = (value == "ذكر")
+        female_selected = (value == "أنثى")
+
+        self.btn_gender_male.setText(self._gender_button_text("ذكر", male_selected))
+        self.btn_gender_female.setText(self._gender_button_text("أنثى", female_selected))
+
+        self.btn_gender_male.setStyleSheet(
+            self._gender_card_style(male_selected, "ذكر")
+        )
+        self.btn_gender_female.setStyleSheet(
+            self._gender_card_style(female_selected, "أنثى")
+        )
+
+        if male_selected:
+            self._animate_gender_button(self.btn_gender_male)
+        elif female_selected:
+            self._animate_gender_button(self.btn_gender_female)
 
 
 
@@ -1468,7 +1580,7 @@ class MainWindow(QMainWindow):
     def get_patient_data(self) -> PatientData:
         name = self.patient_name.text().strip()
         doctor = self.doctor.currentText().strip()
-        gender = self.gender.currentText().strip()
+        gender = self.selected_gender.strip()
         
 
         age_val = int(self.age.value())
@@ -1510,7 +1622,7 @@ class MainWindow(QMainWindow):
         self.patient_name.clear()
         self.doctor.setCurrentIndex(0)
         self.age.setValue(0)
-        self.gender.setCurrentIndex(0)
+        self._set_gender_selection("")
         self.date.setDate(QDate.currentDate())
 
     def on_new_patient_clicked(self):
@@ -1526,7 +1638,20 @@ class MainWindow(QMainWindow):
         return
 
 
+    def open_cbc_directly(self, patient: PatientData, report_id: str):
+        try:
+            with get_conn() as conn:
+                footer_text = get_lab_setting(conn, "footer_text", "")
 
+            pdf_path = make_pdf_cbc_overlay(
+                patient,
+                report_id,
+                footer_text=footer_text,
+            )
+
+            os.startfile(str(pdf_path))
+        except Exception as e:
+            QMessageBox.warning(self, "CBC", f"فشل فتح ملف CBC:\n{e}")
 
 
     def on_module_clicked(self, module_code: str):
@@ -1554,9 +1679,7 @@ class MainWindow(QMainWindow):
             return
 
         if module_code == "CBC":
-            self._cbc_win = CBCWindow(patient, report_id=report_id)
-            self._wire_finalize_reset(self._cbc_win)
-            show_blocking_child(self, self._cbc_win)
+            self.open_cbc_directly(patient, report_id)
             return
 
         self._module_win = ModuleWindow(module_code=module_code, patient=patient, report_id=report_id)
