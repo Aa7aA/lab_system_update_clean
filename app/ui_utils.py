@@ -415,6 +415,58 @@ def _safe_filename(name: str) -> str:
     return "".join(ch if ch.isalnum() or ch in " _-." else "_" for ch in raw)
 
 
+
+def _pdf_tests_folder() -> Path:
+    desktop = Path.home() / "Desktop"
+    folder = desktop / "PDF Tests"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _build_unique_pdf_path(folder: Path, base_name: str) -> Path:
+    safe_base = _safe_filename(base_name) or "patient"
+    if safe_base.lower().endswith(".pdf"):
+        safe_base = safe_base[:-4]
+
+    candidate = folder / f"{safe_base}.pdf"
+    if not candidate.exists():
+        return candidate
+
+    index = 2
+    while True:
+        candidate = folder / f"{safe_base} ({index}).pdf"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def save_pdf_automatically(
+    parent: Optional[QWidget],
+    temp_pdf_path: Path,
+    *,
+    patient_name: str,
+) -> Optional[Path]:
+    """
+    Automatically save the PDF into Desktop/PDF Tests using patient name.
+    Keeps both files if the same name already exists.
+    """
+    try:
+        folder = _pdf_tests_folder()
+        out_path = _build_unique_pdf_path(folder, patient_name)
+
+        shutil.copyfile(str(temp_pdf_path), str(out_path))
+
+        try:
+            temp_pdf_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        return out_path
+    except Exception as e:
+        QMessageBox.warning(parent, "Save Error", f"Failed to save PDF:\n{e}")
+        return None
+
+
 # ----------------------------
 # Printing + PDF save helpers
 # ----------------------------

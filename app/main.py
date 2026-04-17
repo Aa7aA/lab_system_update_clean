@@ -57,7 +57,7 @@ from .ui_utils import (
     fit_window_to_screen,
     apply_round_corners,
     print_pdf_and_delete,
-    save_pdf_via_dialog,
+    save_pdf_automatically,
     show_blocking_child,
 )
 
@@ -181,8 +181,14 @@ class CBCWindow(QMainWindow):
     def on_pdf_clicked(self):
         try:
             pdf_path = self._build_overlay_pdf()
-            suggested_name = f"CBC_{self.patient.name or 'patient'}_{self.report_id}.pdf"
-            save_path = save_pdf_via_dialog(self, pdf_path, suggested_name=suggested_name)
+            patient_name = self.patient.name or "patient"
+
+            save_path = save_pdf_automatically(
+                self,
+                pdf_path,
+                patient_name=patient_name,
+            )
+
             if save_path:
                 self._report_finalized = True
                 QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")

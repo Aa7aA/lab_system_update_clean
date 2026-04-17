@@ -31,7 +31,7 @@ from .ui_builders import build_antibiotics_table_three_columns
 from .ui_utils import (
     make_pdf_culture_report,
     print_pdf_and_delete,
-    save_pdf_via_dialog,
+    save_pdf_automatically,
     widget_set_value,
     group_results,
     apply_global_theme,
@@ -470,8 +470,14 @@ class CultureWindow(QMainWindow):
             footer_text=footer_text,
         )
 
-        suggested = f"{getattr(self.patient, 'name', 'patient')}_{getattr(self.patient, 'date_iso', '')}_Culture_{report_id[:8]}.pdf"
-        out = save_pdf_via_dialog(self, pdf_path, suggested_name=suggested)
+        patient_name = getattr(self.patient, "name", "") or "patient"
+
+        out = save_pdf_automatically(
+            self,
+            pdf_path,
+            patient_name=patient_name,
+        )
+
         if out:
             self._report_finalized = True
             QMessageBox.information(self, "Saved", f"PDF saved.\nResults: {count}\nFile:\n{out}")

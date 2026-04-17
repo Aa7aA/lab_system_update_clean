@@ -5,7 +5,7 @@ from collections import defaultdict
 from types import SimpleNamespace
 from pathlib import Path
 from uuid import uuid4
-import shutil
+
 
 from PySide6.QtCore import Qt, QPoint, Signal
 from PySide6.QtGui import QPixmap, QColor
@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QPushButton,
-    QFileDialog,
     QFrame,
     QToolButton,
     QGraphicsDropShadowEffect,
@@ -59,6 +58,7 @@ from .ui_utils import (
     fit_window_to_screen,
     apply_round_corners,
     make_pdf_sputum_report,
+    save_pdf_automatically,
 )
 
 from .branding import LAB_BRANDING
@@ -642,20 +642,18 @@ class ModuleWindow(QWidget):
                         footer_text=footer_text,
                     )
 
-            default_name = f"{self.module_code}_{(self.report_id or '')[:8]}.pdf"
-            save_path_str, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save PDF",
-                default_name,
-                "PDF Files (*.pdf)",
-            )
-            if not save_path_str:
-                return
+                patient = self._patient_obj()
+                patient_name = getattr(patient, "name", "") or "patient"
 
-            save_path = Path(save_path_str)
-            shutil.copyfile(temp_pdf, save_path)
-            self._report_finalized = True
-            QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
+                save_path = save_pdf_automatically(
+                    self,
+                    temp_pdf,
+                    patient_name=patient_name,
+                )
+
+                if save_path:
+                    self._report_finalized = True
+                    QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في PDF", f"فشل حفظ ملف PDF:\n{e}")
 

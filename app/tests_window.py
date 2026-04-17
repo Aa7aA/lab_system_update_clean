@@ -5,7 +5,7 @@ from typing import Any
 from types import SimpleNamespace
 from pathlib import Path
 from uuid import uuid4
-import shutil
+
 
 from PySide6.QtWidgets import (
     QGroupBox,
@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpacerItem,
     QSizePolicy,
-    QFileDialog,
     QFrame,
     QToolButton,
     QGraphicsDropShadowEffect,
@@ -43,7 +42,15 @@ from .ui_builders import (
     build_two_panel_dropdowns_with_titer,
     build_widal_test_table,
 )
-from .ui_utils import make_pdf_report, group_results, print_pdf, apply_global_theme, fit_window_to_screen, apply_round_corners
+from .ui_utils import (
+    make_pdf_report,
+    group_results,
+    print_pdf,
+    apply_global_theme,
+    fit_window_to_screen,
+    apply_round_corners,
+    save_pdf_automatically,
+)
 from .branding import LAB_BRANDING
 
 class TestsWindow(QWidget):
@@ -954,21 +961,18 @@ class TestsWindow(QWidget):
                 footer_text=footer_text,
             )
 
-            default_name = f"Tests_{(self.report_id or '')[:8]}.pdf"
-            save_path_str, _ = QFileDialog.getSaveFileName(
-                self,
-                "Save PDF",
-                default_name,
-                "PDF Files (*.pdf)",
-            )
-            if not save_path_str:
-                return
+            patient = self._patient_obj()
+            patient_name = getattr(patient, "name", "") or "patient"
 
-            save_path = Path(save_path_str)
-            shutil.copyfile(temp_pdf, save_path)
-            
-            self._report_finalized = True
-            QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
+            save_path = save_pdf_automatically(
+                self,
+                temp_pdf,
+                patient_name=patient_name,
+            )
+
+            if save_path:
+                self._report_finalized = True
+                QMessageBox.information(self, "PDF", f"تم حفظ الملف:\n{save_path}")
         except Exception as e:
             QMessageBox.warning(self, "خطأ في PDF", f"فشل حفظ ملف PDF:\n{e}")
 
