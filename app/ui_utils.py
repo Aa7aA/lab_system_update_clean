@@ -31,7 +31,7 @@ from .db import get_conn, get_lab_setting
 
 
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QStandardPaths
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import (
     QLabel,
@@ -417,13 +417,19 @@ def _safe_filename(name: str) -> str:
 
 
 def _pdf_tests_folder() -> Path:
-    user_profile = os.environ.get("USERPROFILE")
-    if user_profile:
-        desktop = Path(user_profile) / "Desktop"
-    else:
-        desktop = Path.home() / "Desktop"
+    desktop_str = QStandardPaths.writableLocation(QStandardPaths.DesktopLocation)
 
-    desktop.mkdir(parents=True, exist_ok=True)
+    if desktop_str:
+        desktop = Path(desktop_str)
+    else:
+        user_profile = os.environ.get("USERPROFILE")
+        if user_profile:
+            desktop = Path(user_profile) / "Desktop"
+        else:
+            desktop = Path.home() / "Desktop"
+
+    if desktop.exists() and not desktop.is_dir():
+        raise RuntimeError(f"Desktop path is not a folder: {desktop}")
 
     folder = desktop / "PDF Tests"
     folder.mkdir(parents=True, exist_ok=True)
