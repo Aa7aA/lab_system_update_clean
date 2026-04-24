@@ -1191,7 +1191,11 @@ def make_pdf_report(
             c.setFont("Helvetica-Bold", 11)
             c.drawString(X_TEST, y, test[:45])
 
-            if flag == "H":
+            if result_display.strip() == "Positive(+ve)":
+                c.setFillColorRGB(0.75, 0.0, 0.12)
+            elif result_display.strip() == "Negative(-ve)":
+                c.setFillColorRGB(0.00, 0.55, 0.20)
+            elif flag == "H":
                 c.setFillColorRGB(0.75, 0.0, 0.12)
             elif flag == "L":
                 c.setFillColorRGB(0.04, 0.34, 0.82)

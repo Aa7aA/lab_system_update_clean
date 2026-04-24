@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
 )
 
-from .db import get_conn, init_db, get_lab_setting, set_lab_setting
+from .db import get_conn, init_db, get_lab_setting, set_lab_setting, backup_database
 from .branding import LAB_BRANDING
 from .version import APP_VERSION
 from .lab_identity import get_lab_identity
@@ -1088,6 +1088,7 @@ class MainWindow(QMainWindow):
         """
 
         self.patient_name.setStyleSheet(patient_input_style)
+        self.patient_name.textChanged.connect(self.reset_patient_name_style)
         self.doctor.setStyleSheet(patient_input_style)
         self.age_value.setStyleSheet(patient_input_style)
         self.age_unit.setStyleSheet(patient_input_style)
@@ -1220,8 +1221,8 @@ class MainWindow(QMainWindow):
                 border: 1px solid #e7b7bb;
                 border-radius: 16px;
                 padding: 8px 10px;
-                font-size: 13px;
-                font-weight: 700;
+                font-size: 15px;
+                font-weight: 900;
                 text-align: center;
             }
             QPushButton:hover {
@@ -1232,7 +1233,7 @@ class MainWindow(QMainWindow):
                 background-color: #ffe8ea;
             }
         """)
-        btn_exit.clicked.connect(self.close)
+        btn_exit.clicked.connect(self.show_backup_and_exit)
         av.addWidget(btn_exit)
 
         self.add_soft_shadow(tools_box, blur=30, x=0, y=6, alpha=24)
@@ -1250,6 +1251,57 @@ class MainWindow(QMainWindow):
         shadow.setOffset(x, y)
         shadow.setColor(QColor(31, 59, 87, alpha))
         widget.setGraphicsEffect(shadow)
+
+    def add_button_hover_shadow(self, button):
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(47, 111, 228, 45))
+        button.setGraphicsEffect(shadow)
+
+
+    def patient_name_normal_style(self) -> str:
+        return """
+            QLineEdit {
+                font-size: 18px;
+                font-weight: 800;
+                color: #0f2f4f;
+                min-height: 42px;
+                padding-left: 6px;
+                padding-right: 6px;
+                border: 1px solid #d9e2ec;
+                border-radius: 10px;
+                background: #ffffff;
+            }
+        """
+
+    def patient_name_error_style(self) -> str:
+        return """
+            QLineEdit {
+                font-size: 18px;
+                font-weight: 800;
+                color: #0f2f4f;
+                min-height: 42px;
+                padding-left: 6px;
+                padding-right: 6px;
+                border: 2px solid #e63946;
+                border-radius: 10px;
+                background: #fff5f5;
+            }
+        """
+
+    def reset_patient_name_style(self):
+        self.patient_name.setStyleSheet(self.patient_name_normal_style())
+
+    def validate_patient_fields(self) -> bool:
+        if not self.patient_name.text().strip():
+            self.patient_name.setStyleSheet(self.patient_name_error_style())
+            self.patient_name.setFocus()
+            return False
+
+        self.patient_name.setStyleSheet(self.patient_name_normal_style())
+        return True
+
 
 
     def resizeEvent(self, event):
@@ -1285,19 +1337,22 @@ class MainWindow(QMainWindow):
                 border: 1px solid #c6d3e1;
                 border-radius: 20px;
                 padding: 8px 10px;
-                font-size: 15px;
-                font-weight: 800;
+                font-size: 17px;
+                font-weight: 900;
             }
 
             QPushButton:hover {
-                background-color: #f7fbff;
-                border: 1px solid #8fc7ff;
+                background-color: #eef6ff;
+                border: 2px solid #3a7afe;
+                color: #0f2f4f;
             }
 
             QPushButton:pressed {
-                background-color: #eef5ff;
+                background-color: #dcecff;
+                border: 2px solid #2f6fe4;
             }
         """)
+        self.add_button_hover_shadow(btn)
         return btn
 
 
@@ -1314,18 +1369,21 @@ class MainWindow(QMainWindow):
                 border: 1px solid #c6d3e1;
                 border-radius: 16px;
                 padding: 8px 10px;
-                font-size: 13px;
-                font-weight: 700;
+                font-size: 15px;
+                font-weight: 900;
                 text-align: center;
             }
             QPushButton:hover {
-                background-color: #f5f9ff;
-                border: 1px solid #8fc7ff;
+                background-color: #eef6ff;
+                border: 2px solid #3a7afe;
+                color: #0f2f4f;
             }
             QPushButton:pressed {
-                background-color: #eaf3ff;
+                background-color: #dcecff;
+                border: 2px solid #2f6fe4;
             }
         """)
+        self.add_button_hover_shadow(btn)
         return btn
 
 
@@ -1641,18 +1699,7 @@ class MainWindow(QMainWindow):
         )
 
     def _can_open_modules(self) -> bool:
-        patient_name = self.patient_name.text().strip()
-
-        if not patient_name:
-            QMessageBox.warning(
-                self,
-                "بيانات ناقصة",
-                "يرجى إدخال اسم المريض أولاً."
-            )
-            self.patient_name.setFocus()
-            return False
-
-        return True
+        return self.validate_patient_fields()
 
 
 
@@ -1763,9 +1810,75 @@ class MainWindow(QMainWindow):
         self._drag_pos = None
         super().mouseReleaseEvent(event)
 
+    def show_backup_and_exit(self):
+        dlg = QWidget(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setFixedSize(300, 120)
+        dlg.setStyleSheet("""
+            QWidget {
+                background: white;
+                border-radius: 16px;
+                border: 1px solid #dde2ea;
+            }
+        """)
 
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(16, 16, 16, 16)
 
+        label = QLabel("جاري إنشاء نسخة احتياطية...")
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("font-size: 15px; font-weight: 800; color: #1f3b57;")
 
+        progress = QProgressBar()
+        progress.setRange(0, 0)  # infinite loading
+        progress.setTextVisible(False)
+
+        layout.addWidget(label)
+        layout.addWidget(progress)
+
+        dlg.show()
+        QApplication.processEvents()
+
+        try:
+            backup_database()
+        except Exception as e:
+            QMessageBox.warning(self, "خطأ", f"فشل النسخ الاحتياطي:\n{e}")
+
+        end_time = time.time() + 1.5
+        while time.time() < end_time:
+            QApplication.processEvents()
+
+        dlg.close()
+        QApplication.quit()
+
+    def validate_patient_fields(self) -> bool:
+        is_valid = True
+
+        # Reset style first
+        normal_style = """
+            QLineEdit {
+                border: 1px solid #c6d3e1;
+                border-radius: 10px;
+                padding: 4px;
+            }
+        """
+
+        error_style = """
+            QLineEdit {
+                border: 2px solid #e74c3c;
+                border-radius: 10px;
+                padding: 4px;
+            }
+        """
+
+        self.patient_name.setStyleSheet(normal_style)
+
+        if not self.patient_name.text().strip():
+            self.patient_name.setStyleSheet(error_style)
+            self.patient_name.setFocus()
+            is_valid = False
+
+        return is_valid
 
 class SplashScreen(QMainWindow):
     def __init__(self):
@@ -1971,7 +2084,7 @@ def main():
     splash.update_progress(100, "تم التشغيل")
 
     elapsed = time.time() - start_time
-    remaining = max(0, 5 - elapsed)
+    remaining = max(0, 3 - elapsed)
     end_time = time.time() + remaining
 
     while time.time() < end_time:

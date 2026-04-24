@@ -47,24 +47,33 @@ def ensure_db_file_location() -> None:
     DB_PATH.touch()
 
 
-def backup_database() -> Path | None:
+def backup_database() -> None:
     """
-    Create a timestamped backup of the current database file.
-    Returns the backup path if a backup was created.
+    Rotating backup system (keeps only 3 backups)
     """
     ensure_db_file_location()
 
     if not DB_PATH.exists():
-        return None
+        return
 
     backup_dir = APP_DATA_DIR / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    backup_path = backup_dir / f"lab_backup_{stamp}.db"
+    latest = backup_dir / "LabBackup_latest.db"
+    prev1 = backup_dir / "LabBackup_previous_1.db"
+    prev2 = backup_dir / "LabBackup_previous_2.db"
 
-    shutil.copy2(DB_PATH, backup_path)
-    return backup_path
+    # Rotate files
+    if prev1.exists():
+        if prev2.exists():
+            prev2.unlink()
+        prev1.rename(prev2)
+
+    if latest.exists():
+        latest.rename(prev1)
+
+    # Create new latest backup
+    shutil.copy2(DB_PATH, latest)
 
 
 def _configure_conn(conn: sqlite3.Connection) -> sqlite3.Connection:
