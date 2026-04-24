@@ -1,13 +1,13 @@
 [Setup]
 AppId=ALSHAFAQLAB
 AppName=AL-SHAFAQ LAB
-AppVersion=1.0.9
+AppVersion=1.0.10
 AppPublisher=AL-SHAFAQ LAB
 DefaultDirName={autopf}\AL-SHAFAQ LAB
 DefaultGroupName=AL-SHAFAQ LAB
 UninstallDisplayIcon={app}\AL-SHAFAQ LAB.exe
 OutputDir=output
-OutputBaseFilename=AL-SHAFAQ-LAB-Setup-1.0.9
+OutputBaseFilename=AL-SHAFAQ-LAB-Setup-1.0.10
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

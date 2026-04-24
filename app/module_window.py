@@ -44,6 +44,7 @@ from .ui_builders import (
     build_notes_tab,
     build_two_panel_keylabel_dropdowns,
     build_torch_two_panel_dropdowns,
+    make_positive_negative_buttons,
 )
 
 # Uses your reportlab-based PDF code from ui_utils.py
@@ -1407,10 +1408,7 @@ class ModuleWindow(QWidget):
 
                 for tname, w in inputs.items():
                     saved = existing.get((cat_name, tname), "")
-                    if isinstance(w, QComboBox):
-                        w.setCurrentText(saved)
-                    else:
-                        w.setText(saved)
+                    self._set_widget_value(w, saved)
 
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1436,10 +1434,7 @@ class ModuleWindow(QWidget):
 
                 for tname, w in inputs.items():
                     saved = existing.get((cat_name, tname), "")
-                    if isinstance(w, QComboBox):
-                        w.setCurrentText(saved)
-                    else:
-                        w.setText(saved)
+                    self._set_widget_value(w, saved)
 
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1474,10 +1469,7 @@ class ModuleWindow(QWidget):
 
                 for tname, w in inputs.items():
                     saved = existing.get((cat_name, tname), "")
-                    if isinstance(w, QComboBox):
-                        w.setCurrentText(saved)
-                    else:
-                        w.setText(saved)
+                    self._set_widget_value(w, saved)
 
                 self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1505,12 +1497,20 @@ class ModuleWindow(QWidget):
                     cb.setCurrentText(existing.get((cat_name, test_name), ""))
                     form.addRow(self._make_bold_test_label(test_name), cb)
                     self._registry.append((cat_name, test_name, cb, ""))
+
+                elif itype == "buttons":
+                    btns = make_positive_negative_buttons()
+                    btns.set_value(existing.get((cat_name, test_name), ""))
+                    form.addRow(self._make_bold_test_label(test_name), btns)
+                    self._registry.append((cat_name, test_name, btns, ""))
+
                 elif itype == "textarea":
                     te = QTextEdit()
                     te.setMinimumHeight(120)
                     te.setPlainText(existing.get((cat_name, test_name), ""))
                     form.addRow(self._make_bold_test_label(test_name), te)
                     self._registry.append((cat_name, test_name, te, ""))
+
                 else:
                     ed = QLineEdit()
                     ed.setText(existing.get((cat_name, test_name), ""))
@@ -1519,10 +1519,43 @@ class ModuleWindow(QWidget):
 
             self.tabs.addTab(tab, cat_name)
 
+
+    def _set_widget_value(self, widget: Any, value: str) -> None:
+        value = value or ""
+
+        if hasattr(widget, "set_value"):
+            widget.set_value(value)
+            return
+
+        if isinstance(widget, QLineEdit):
+            widget.setText(value)
+            return
+
+        if isinstance(widget, QComboBox):
+            widget.setCurrentText(value)
+            return
+
+        if isinstance(widget, QTextEdit):
+            widget.setPlainText(value)
+            return
+
+
+
     # --------------------------------------------------
     # SAVE / CLOSE
     # --------------------------------------------------
     def _read_widget_value(self, w: Any) -> str:
+        if hasattr(w, "btn_positive") and hasattr(w, "btn_negative"):
+            if w.btn_positive.isChecked():
+                return "Positive"
+            if w.btn_negative.isChecked():
+                return "Negative"
+            if hasattr(w, "value"):
+                return (w.value() or "").strip()
+            return ""
+
+        if hasattr(w, "value"):
+            return (w.value() or "").strip()
         if isinstance(w, QLineEdit):
             return (w.text() or "").strip()
         if isinstance(w, QComboBox):

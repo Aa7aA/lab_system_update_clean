@@ -325,11 +325,12 @@ def make_title(text: str) -> QLabel:
     lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
     lbl.setStyleSheet("""
         QLabel {
-            font-size: 14px;
-            font-weight: 700;
-            color: #16324f;
+            font-size: 16px;
+            font-weight: 900;
+            color: #0f2f4f;
             background: transparent;
-            padding: 0px;
+            padding-left: 4px;
+            padding-right: 4px;
         }
     """)
     return lbl
@@ -977,7 +978,7 @@ def make_pdf_report(
 
     X_TEST = LEFT_X
     X_RESULT = 8.4 * cm
-    X_FLAG = 10.0 * cm
+    X_FLAG = 11.0 * cm
     X_RANGE = RIGHT_X
 
     settings = _get_print_settings()

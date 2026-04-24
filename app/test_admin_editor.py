@@ -51,7 +51,7 @@ LAYOUT_CHOICES = [
 ]
 
 
-INPUT_TYPE_CHOICES = ["text", "dropdown"]
+INPUT_TYPE_CHOICES = ["text", "dropdown", "buttons", "titer"]
 
 
 def load_editor_modules() -> list[tuple[str, str]]:

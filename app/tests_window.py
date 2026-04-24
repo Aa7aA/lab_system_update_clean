@@ -41,6 +41,7 @@ from .ui_builders import (
     build_two_column_mixed_form_with_flags,
     build_two_panel_dropdowns_with_titer,
     build_widal_test_table,
+    make_positive_negative_buttons,
 )
 from .ui_utils import (
     make_pdf_report,
@@ -735,11 +736,68 @@ class TestsWindow(QWidget):
         return {(str(cat), str(tn)): (res or "") for (cat, tn, res) in rows}
 
     def _read_widget_value(self, w: Any) -> str:
+        # Handle TITER input
+        if hasattr(w, "_result_cb") and hasattr(w, "_titer_edit"):
+            result = w._result_cb.currentText().strip()
+            titer = w._titer_edit.text().strip()
+
+            if result and titer:
+                return f"{result} ({titer})"
+            elif result:
+                return result
+            elif titer:
+                return titer
+            return ""
+        if hasattr(w, "value"):
+            return (w.value() or "").strip()
+
         if isinstance(w, QLineEdit):
             return (w.text() or "").strip()
+
         if isinstance(w, QComboBox):
             return (w.currentText() or "").strip()
+
         return ""
+
+
+    def _set_widget_value(self, w: Any, value: str) -> None:
+        value = value or ""
+
+        # Handle TITER input
+        if hasattr(w, "_result_cb") and hasattr(w, "_titer_edit"):
+            value = value or ""
+
+            if "(" in value and ")" in value:
+                try:
+                    result_part = value.split("(")[0].strip()
+                    titer_part = value.split("(")[1].replace(")", "").strip()
+
+                    w._result_cb.setCurrentText(result_part)
+                    w._titer_edit.setText(titer_part)
+                    return
+                except Exception:
+                    pass
+
+            # fallback
+            w._result_cb.setCurrentText(value)
+            w._titer_edit.clear()
+            return
+
+
+
+
+        if hasattr(w, "set_value"):
+            w.set_value(value)
+            return
+
+        if isinstance(w, QLineEdit):
+            w.setText(value)
+            return
+
+        if isinstance(w, QComboBox):
+            w.setCurrentText(value)
+            return
+
 
     def save_results(self) -> None:
         with get_conn() as conn:
@@ -750,6 +808,59 @@ class TestsWindow(QWidget):
             for cat_name, widgets in self.inputs_by_category.items():
                 for test_name, widget in widgets.items():
                     value = self._read_widget_value(widget).strip()
+
+                    if hasattr(widget, "_result_cb") and hasattr(widget, "_titer_edit"):
+                        result_value = widget._result_cb.currentText().strip()
+                        titer_value = widget._titer_edit.text().strip()
+
+                        if not result_value:
+                            conn.execute(
+                                """
+                                DELETE FROM report_results
+                                WHERE report_id = ? AND module = ? AND category = ? AND test_name = ?
+                                """,
+                                (report_id, "Tests", cat_name, test_name),
+                            )
+                        else:
+                            conn.execute(
+                                """
+                                INSERT INTO report_results(report_id, module, category, test_name, result, unit, flag)
+                                VALUES(?,?,?,?,?,?,?)
+                                ON CONFLICT(report_id, module, category, test_name)
+                                DO UPDATE SET
+                                    result = excluded.result,
+                                    unit = excluded.unit,
+                                    flag = excluded.flag
+                                """,
+                                (report_id, "Tests", cat_name, test_name, result_value, "", ""),
+                            )
+
+                        titer_key = f"{test_name}__titer"
+
+                        if not titer_value:
+                            conn.execute(
+                                """
+                                DELETE FROM report_results
+                                WHERE report_id = ? AND module = ? AND category = ? AND test_name = ?
+                                """,
+                                (report_id, "Tests", cat_name, titer_key),
+                            )
+                        else:
+                            conn.execute(
+                                """
+                                INSERT INTO report_results(report_id, module, category, test_name, result, unit, flag)
+                                VALUES(?,?,?,?,?,?,?)
+                                ON CONFLICT(report_id, module, category, test_name)
+                                DO UPDATE SET
+                                    result = excluded.result,
+                                    unit = excluded.unit,
+                                    flag = excluded.flag
+                                """,
+                                (report_id, "Tests", cat_name, titer_key, titer_value, "", ""),
+                            )
+
+                        continue
+
 
                     if not value:
                         conn.execute(
@@ -873,8 +984,8 @@ class TestsWindow(QWidget):
 
     def _merge_titers_rows_for_pdf(self, rows: list[dict]) -> list[dict]:
         """
-        Merge only Titers category __titer rows into the visible base rows,
-        exactly like Torch behavior, while leaving all other categories unchanged.
+        Merge Titers category __titer rows into visible base rows.
+        If a titer value exists without dropdown result, still show the test in PDF.
         """
         merged: list[dict] = []
         base_rows: dict[tuple[str, str], dict] = {}
@@ -892,24 +1003,28 @@ class TestsWindow(QWidget):
                 base_rows[(category, test_name)] = copied
                 merged.append(copied)
 
-        for key, base_row in base_rows.items():
-            titer_row = titer_rows.get(key)
-            if not titer_row:
+        for key, titer_row in titer_rows.items():
+            base_row = base_rows.get(key)
+
+            if base_row:
+                base_row["titer"] = str(titer_row.get("result", "") or "")
+                base_row["flag"] = str(titer_row.get("flag", "") or "")
+                base_row["unit"] = str(titer_row.get("unit", "") or "")
                 continue
 
-            # keep the real H/L/N flag from the titer row separately
-            base_row["titer"] = str(titer_row.get("result", "") or "")
-            base_row["flag"] = str(titer_row.get("flag", "") or "")
-            base_row["unit"] = str(titer_row.get("unit", "") or "")
+            category, base_name = key
 
-            # use the base test's range for Normal Range
-            # because normal_ranges are defined on the visible test name, not "__titer"
-            # so leave base_row["ranges"] and base_row["matched_range"] as they already are
+            new_row = dict(titer_row)
+            new_row["category"] = category
+            new_row["test_name"] = base_name
+            new_row["result"] = ""
+            new_row["unit"] = str(titer_row.get("unit", "") or "")
+            new_row["flag"] = str(titer_row.get("flag", "") or "")
+            new_row["titer"] = str(titer_row.get("result", "") or "")
+
+            merged.append(new_row)
 
         return merged
-
-
-
 
 
 
@@ -1091,10 +1206,8 @@ class TestsWindow(QWidget):
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
                             saved = existing[(cat_name, tname)]
-                            if isinstance(w, QComboBox):
-                                w.setCurrentText(saved)
-                            else:
-                                w.setText(saved)
+                            self._set_widget_value(w, saved)
+                          
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1136,10 +1249,7 @@ class TestsWindow(QWidget):
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
                             saved = existing[(cat_name, tname)]
-                            if isinstance(w, QComboBox):
-                                w.setCurrentText(saved)
-                            else:
-                                w.setText(saved)
+                            self._set_widget_value(w, saved)
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1178,10 +1288,7 @@ class TestsWindow(QWidget):
                     for tname, w in inputs.items():
                         if (cat_name, tname) in existing:
                             saved = existing[(cat_name, tname)]
-                            if isinstance(w, QComboBox):
-                                w.setCurrentText(saved)
-                            else:
-                                w.setText(saved)
+                            self._set_widget_value(w, saved)
 
                     self._wire_live_flags(cat_name, inputs, flags, ranges)
 
@@ -1193,11 +1300,15 @@ class TestsWindow(QWidget):
                     continue
 
                 if lt == "titers_two_col":
-                    dropdown_ids = [t[0] for t in tests if (t[2] or "") == "dropdown"]
+                    option_ids = [
+                        int(t[0]) for t in tests
+                        if str(t[2] or "").strip().lower() in {"dropdown", "titer"}
+                    ]
+
                     options_by_test_id: dict[int, list[str]] = defaultdict(list)
 
-                    if dropdown_ids:
-                        placeholders = ",".join("?" for _ in dropdown_ids)
+                    if option_ids:
+                        placeholders = ",".join("?" for _ in option_ids)
                         opt_rows = conn.execute(
                             f"""
                             SELECT test_id, option_value
@@ -1205,42 +1316,50 @@ class TestsWindow(QWidget):
                             WHERE test_id IN ({placeholders})
                             ORDER BY sort_order, option_value
                             """,
-                            dropdown_ids,
+                            option_ids,
                         ).fetchall()
-                        for test_id, val in opt_rows:
-                            options_by_test_id[int(test_id)].append(val)
 
-                    left_items: list[tuple[str, list[str]]] = []
-                    right_items: list[tuple[str, list[str]]] = []
+                        for test_id, val in opt_rows:
+                            options_by_test_id[int(test_id)].append(str(val))
+
+                    left_defs = []
+                    right_defs = []
 
                     total_tests = len(tests)
                     split_index = max(total_tests - 10, 0)
 
                     for i, (test_id, test_name, input_type, unit_default, col, pos, sort_order) in enumerate(tests):
-                        options = options_by_test_id.get(int(test_id), [])
-                        if i >= split_index:
-                            right_items.append((test_name, options))
-                        else:
-                            left_items.append((test_name, options))
+                        itype = str(input_type or "text").strip().lower()
 
-                    tab, result_widgets, titer_widgets = build_two_panel_dropdowns_with_titer(
-                        left_items,
-                        right_items,
-                        left_title="",
-                        right_title="",
-                        editable=True,
+                        row_def = (
+                            str(test_name),
+                            itype,
+                            options_by_test_id.get(int(test_id), []),
+                        )
+
+                        if i >= split_index:
+                            right_defs.append(row_def)
+                        else:
+                            left_defs.append(row_def)
+
+                    tab, inputs, flags, ranges = build_two_column_mixed_form_with_flags(
+                        left_defs,
+                        right_defs,
+                        cat_name,
                     )
 
-                    for test_name, cb in result_widgets.items():
-                        saved_value = existing.get((cat_name, test_name), "")
-                        cb.setCurrentText(saved_value)
-                        self.inputs_by_category[cat_name][test_name] = cb
+                    for tname, w in inputs.items():
+                        if hasattr(w, "_result_cb") and hasattr(w, "_titer_edit"):
+                            w._result_cb.setCurrentText(existing.get((cat_name, tname), ""))
+                            w._titer_edit.setText(existing.get((cat_name, f"{tname}__titer"), ""))
+                        else:
+                            self._set_widget_value(w, existing.get((cat_name, tname), ""))
 
-                    for test_name, titer_edit in titer_widgets.items():
-                        titer_key = f"{test_name}__titer"
-                        saved_titer = existing.get((cat_name, titer_key), "")
-                        titer_edit.setText(saved_titer)
-                        self.inputs_by_category[cat_name][titer_key] = titer_edit
+                    self._wire_live_flags(cat_name, inputs, flags, ranges)
+
+                    self.inputs_by_category[cat_name].update(inputs)
+                    self.flags_by_test.update(flags)
+                    self.ranges_by_test.update(ranges)
 
                     self.tabs.addTab(tab, cat_name)
                     continue
@@ -1267,17 +1386,24 @@ class TestsWindow(QWidget):
                         options_by_test_id[int(test_id)].append(val)
 
                     for test_id, test_name, input_type, unit_default, col, pos, sort_order in tests:
-                        if input_type == "dropdown":
+                        itype = str(input_type or "text").strip().lower()
+
+                        if itype == "dropdown":
                             w = QComboBox()
                             w.setEditable(True)
                             w.setInsertPolicy(QComboBox.NoInsert)
                             w.addItem("")
                             for opt in options_by_test_id.get(int(test_id), []):
                                 w.addItem(str(opt))
-                            w.setCurrentText(existing.get((cat_name, test_name), ""))
+                            self._set_widget_value(w, existing.get((cat_name, test_name), ""))
+
+                        elif itype == "buttons":
+                            w = make_positive_negative_buttons()
+                            self._set_widget_value(w, existing.get((cat_name, test_name), ""))
+
                         else:
                             w = QLineEdit()
-                            w.setText(existing.get((cat_name, test_name), ""))
+                            self._set_widget_value(w, existing.get((cat_name, test_name), ""))
 
                         form.addRow(self._make_bold_test_label(test_name), w)
                         self.inputs_by_category[cat_name][test_name] = w

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QFormLayout,
+    QPushButton,
 )
 
 # ----------------------------
@@ -47,6 +48,118 @@ def _add_combo_items(cb: QComboBox, options: list[str], ensure_empty: bool = Tru
         cb.addItem("")
     for o in cleaned:
         cb.addItem(o)
+
+
+
+class PositiveNegativeButtons(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self._value = ""
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        self.btn_positive = QPushButton("Positive(+ve)")
+        self.btn_negative = QPushButton("Negative(-ve)")
+        self.btn_positive.setCheckable(True)
+        self.btn_negative.setCheckable(True)
+
+
+        self.btn_positive.setMinimumHeight(30)
+        self.btn_negative.setMinimumHeight(30)
+
+        self.btn_positive.setCursor(Qt.PointingHandCursor)
+        self.btn_negative.setCursor(Qt.PointingHandCursor)
+
+        self.btn_positive.clicked.connect(lambda: self.set_value("Positive(+ve)"))
+        self.btn_negative.clicked.connect(lambda: self.set_value("Negative(-ve)"))
+
+        row.addWidget(self.btn_positive)
+        row.addWidget(self.btn_negative)
+
+        self._refresh_style()
+
+    def value(self) -> str:
+        return self._value
+
+    def set_value(self, value: str) -> None:
+        value = (value or "").strip()
+
+        if value in {"Positive", "Positive(+ve)", "Positive (+)", "+", "+ve"}:
+            self._value = "Positive(+ve)"
+        elif value in {"Negative", "Negative(-ve)", "Negative (-)", "-", "-ve"}:
+            self._value = "Negative(-ve)"
+        else:
+            self._value = ""
+
+        self.btn_positive.setChecked(self._value == "Positive(+ve)")
+        self.btn_negative.setChecked(self._value == "Negative(-ve)")
+
+        self._refresh_style()
+
+    def _refresh_style(self) -> None:
+        base = """
+            QPushButton {
+                background-color: #ffffff;
+                color: #28415f;
+                border: 1px solid #c6d3e1;
+                border-radius: 10px;
+                padding: 6px 10px;
+                font-size: 13px;
+                font-weight: 800;
+            }
+            QPushButton:hover {
+                background-color: #f5f9ff;
+                border: 1px solid #8fc7ff;
+            }
+        """
+
+        positive_selected = """
+            QPushButton {
+                background-color: #ffd6df;
+                color: #8a1f35;
+                border: 2px solid #ff4d6d;
+                border-radius: 10px;
+                padding: 6px 10px;
+                font-size: 13px;
+                font-weight: 900;
+            }
+        """
+
+        negative_selected = """
+            QPushButton {
+                background-color: #dff5e7;
+                color: #146c37;
+                border: 2px solid #2fa866;
+                border-radius: 10px;
+                padding: 6px 10px;
+                font-size: 13px;
+                font-weight: 900;
+            }
+        """
+
+        self.btn_positive.setStyleSheet(
+            positive_selected if self._value == "Positive(+ve)" else base
+        )
+        self.btn_negative.setStyleSheet(
+            negative_selected if self._value == "Negative(-ve)" else base
+        )
+
+
+def make_positive_negative_buttons() -> PositiveNegativeButtons:
+    return PositiveNegativeButtons()
+
+
+
+
+
+
+
+
+
+
 
 
 def _build_flagged_rows_grid(
@@ -121,13 +234,48 @@ def _build_mixed_rows_grid(
         lbl = _make_test_name_label(f"{test_name} :")
         lbl.setMinimumWidth(78)
 
-        if (input_type or "").strip() == "dropdown":
+        itype = (input_type or "").strip().lower()
+
+        if itype == "dropdown":
             w = QComboBox()
             w.setEditable(True)
             w.setInsertPolicy(QComboBox.NoInsert)
             _add_combo_items(w, options or [], ensure_empty=True)
             w.setMinimumHeight(26)
             w.setMinimumWidth(96)
+        elif itype == "titer":
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+
+            cb = QComboBox()
+            cb.setEditable(True)
+            _add_combo_items(cb, options or [], ensure_empty=True)
+            cb.setMinimumHeight(26)
+
+            titer_edit = QLineEdit()
+            titer_edit.setPlaceholderText("Titer")
+            titer_edit.setFixedWidth(80)
+
+            row_layout.addWidget(cb, 1)
+            row_layout.addWidget(titer_edit, 0)
+
+            # store as combined widget
+            w = row_widget
+
+            # VERY IMPORTANT: attach children for later access
+            w._result_cb = cb
+            w._titer_edit = titer_edit
+
+
+
+
+        elif itype == "buttons":
+            w = make_positive_negative_buttons()
+            w.setMinimumHeight(30)
+            w.setMinimumWidth(160)
+
         else:
             w = QLineEdit()
             w.setPlaceholderText("Result")

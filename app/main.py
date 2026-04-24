@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import os
+import time
 import win32event
 import win32api
 import winerror
@@ -41,6 +42,8 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QScrollArea,
     QButtonGroup,
+    QProgressBar,
+    QGraphicsOpacityEffect,
 )
 
 from .db import get_conn, init_db, get_lab_setting, set_lab_setting
@@ -950,8 +953,7 @@ class MainWindow(QMainWindow):
         logo_layout.setContentsMargins(6, 6, 6, 6)
         logo = QLabel()
         logo.setAlignment(Qt.AlignCenter)
-        logo.setMinimumSize(220, 90)
-        logo.setMaximumHeight(240)
+        logo.setFixedSize(300, 300)
 
         logo_path = Path(LAB_BRANDING["logo_path"])
 
@@ -960,14 +962,18 @@ class MainWindow(QMainWindow):
             logo.setPixmap(
                 pixmap.scaled(
                     logo.size(),
-                    Qt.KeepAspectRatio,
+                    Qt.KeepAspectRatioByExpanding,
                     Qt.SmoothTransformation
                 )
             )
+            logo.setAlignment(Qt.AlignCenter)
+            logo.setScaledContents(False)
         else:
             logo.setText("Logo not found")
 
-        logo_layout.addWidget(logo, 1)
+        logo_layout.addStretch()
+        logo_layout.addWidget(logo, 0, Qt.AlignCenter)
+        logo_layout.addStretch()
         self.add_soft_shadow(logo_box, blur=30, x=0, y=6, alpha=24)
         top_row.addWidget(logo_box, 2)
 
@@ -981,22 +987,40 @@ class MainWindow(QMainWindow):
         )
 
         pgrid = QGridLayout(patient_box)
-        pgrid.setContentsMargins(10, 12, 10, 10)
+        pgrid.setContentsMargins(12, 10, 12, 8)
         pgrid.setHorizontalSpacing(12)
-        pgrid.setVerticalSpacing(8)
+        pgrid.setVerticalSpacing(4)
 
         self.patient_name = QLineEdit()
         self.patient_name.setPlaceholderText("اسم المريض")
-        self.patient_name.setMinimumHeight(32)
+        self.patient_name.setMinimumHeight(38)
 
         self.doctor = QComboBox()
-        self.doctor.setMinimumHeight(32)
+        self.doctor.setMinimumHeight(38)
 
-        self.age = QSpinBox()
-        self.age.setRange(0, 120)
-        self.age.setValue(0)
-        self.age.setMinimumHeight(32)
-        self.age.setButtonSymbols(QSpinBox.UpDownArrows)
+        self.age_input_widget = QWidget()
+        age_layout = QHBoxLayout(self.age_input_widget)
+        age_layout.setContentsMargins(0, 0, 0, 0)
+        age_layout.setSpacing(6)
+
+        self.age_value = QLineEdit()
+        self.age_value.setPlaceholderText("0")
+        self.age_value.setMinimumHeight(38)
+        self.age_value.setFixedWidth(80)
+
+        self.age_unit = QComboBox()
+        self.age_unit.setMinimumHeight(38)
+        self.age_unit.setFixedWidth(110)
+
+        self.age_unit.addItems([
+            "سنة",
+            "شهر",
+            "أسبوع",
+            "يوم"
+        ])
+
+        age_layout.addWidget(self.age_value)
+        age_layout.addWidget(self.age_unit)
 
         self.selected_gender = ""
 
@@ -1006,12 +1030,12 @@ class MainWindow(QMainWindow):
         self.gender_cards_layout.setSpacing(8)
 
         self.btn_gender_male = QPushButton(self._gender_button_text("ذكر", False))
-        self.btn_gender_male.setMinimumHeight(32)
+        self.btn_gender_male.setMinimumHeight(38)
         self.btn_gender_male.setCursor(Qt.PointingHandCursor)
         self.btn_gender_male.setCheckable(False)
 
         self.btn_gender_female = QPushButton(self._gender_button_text("أنثى", False))
-        self.btn_gender_female.setMinimumHeight(32)
+        self.btn_gender_female.setMinimumHeight(38)
         self.btn_gender_female.setCursor(Qt.PointingHandCursor)
         self.btn_gender_female.setCheckable(False)
 
@@ -1027,10 +1051,10 @@ class MainWindow(QMainWindow):
         self.date = QDateEdit()
         self.date.setCalendarPopup(True)
         self.date.setDate(QDate.currentDate())
-        self.date.setMinimumHeight(32)
+        self.date.setMinimumHeight(38)
 
         self.btn_new_patient = QPushButton("مريض جديد")
-        self.btn_new_patient.setMinimumHeight(32)
+        self.btn_new_patient.setMinimumHeight(38)
         self.btn_new_patient.setCursor(Qt.PointingHandCursor)
         self.btn_new_patient.setStyleSheet("""
             QPushButton {
@@ -1039,7 +1063,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #c6d3e1;
                 border-radius: 12px;
                 padding: 6px 12px;
-                font-size: 13px;
+                font-size: 15px;
                 font-weight: 700;
                 text-align: center;
             }
@@ -1052,7 +1076,22 @@ class MainWindow(QMainWindow):
             }
         """)
         self.btn_new_patient.clicked.connect(self.on_new_patient_clicked)
+        patient_input_style = """
+            QLineEdit, QComboBox, QDateEdit {
+                font-size: 18px;
+                font-weight: 800;
+                color: #0f2f4f;
+                min-height: 42px;
+                padding-left: 6px;
+                padding-right: 6px;
+            }
+        """
 
+        self.patient_name.setStyleSheet(patient_input_style)
+        self.doctor.setStyleSheet(patient_input_style)
+        self.age_value.setStyleSheet(patient_input_style)
+        self.age_unit.setStyleSheet(patient_input_style)
+        self.date.setStyleSheet(patient_input_style)
 
 
 
@@ -1060,7 +1099,7 @@ class MainWindow(QMainWindow):
         # make inputs look balanced
         self.patient_name.setMinimumWidth(380)
         self.doctor.setMinimumWidth(380)
-        self.age.setMinimumWidth(120)
+        self.age_input_widget.setMinimumWidth(180)
         self.gender_cards_widget.setMinimumWidth(220)
         self.date.setMinimumWidth(130)
         self.btn_new_patient.setMinimumWidth(140)
@@ -1078,7 +1117,7 @@ class MainWindow(QMainWindow):
         pgrid.addWidget(self.gender_cards_widget, 2, 1)
 
         pgrid.addWidget(make_title("العمر:"), 2, 2)
-        pgrid.addWidget(self.age, 2, 3)
+        pgrid.addWidget(self.age_input_widget, 2, 3)
 
         # Row 4: date + new patient button
         pgrid.addWidget(make_title("التاريخ:"), 3, 0)
@@ -1313,7 +1352,7 @@ class MainWindow(QMainWindow):
                     border: 2px solid {border};
                     border-radius: 14px;
                     padding: 8px 10px;
-                    font-size: 14px;
+                    font-size: 15px;
                     font-weight: 800;
                     text-align: center;
                 }}
@@ -1326,7 +1365,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid #c6d3e1;
                 border-radius: 14px;
                 padding: 8px 10px;
-                font-size: 14px;
+                font-size: 15px;
                 font-weight: 700;
                 text-align: center;
             }
@@ -1583,8 +1622,13 @@ class MainWindow(QMainWindow):
         gender = self.selected_gender.strip()
         
 
-        age_val = int(self.age.value())
-        age = None if age_val == 0 else age_val
+        age_text = self.age_value.text().strip()
+        unit_text = self.age_unit.currentText()
+
+        if age_text.isdigit():
+            age = f"{age_text} {unit_text}"
+        else:
+            age = None
 
         date_iso = self.date.date().toString("yyyy-MM-dd")
 
@@ -1621,7 +1665,8 @@ class MainWindow(QMainWindow):
 
         self.patient_name.clear()
         self.doctor.setCurrentIndex(0)
-        self.age.setValue(0)
+        self.age_value.clear()
+        self.age_unit.setCurrentIndex(0)
         self._set_gender_selection("")
         self.date.setDate(QDate.currentDate())
 
@@ -1722,8 +1767,177 @@ class MainWindow(QMainWindow):
 
 
 
+class SplashScreen(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setFixedSize(620, 520)
+
+        shell = QFrame()
+        shell.setObjectName("SplashShell")
+        shell.setStyleSheet("""
+            QFrame#SplashShell {
+                background-color: #ffffff;
+                border: 1px solid #dbe7f5;
+                border-radius: 30px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(55)
+        shadow.setOffset(0, 14)
+        shadow.setColor(QColor(31, 59, 87, 85))
+        shell.setGraphicsEffect(shadow)
+
+        outer = QVBoxLayout(shell)
+        outer.setContentsMargins(42, 34, 42, 30)
+        outer.setSpacing(14)
+        outer.setAlignment(Qt.AlignCenter)
+
+        self.logo = QLabel()
+        self.logo.setFixedSize(250, 250)
+        self.logo.setAlignment(Qt.AlignCenter)
+
+        logo_path = Path(LAB_BRANDING["logo_path"])
+        if logo_path.exists():
+            pixmap = QPixmap(str(logo_path))
+            self.logo.setPixmap(
+                pixmap.scaled(
+                    self.logo.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+            )
+
+        self.ar_title = QLabel(LAB_BRANDING["lab_name_ar"])
+        self.ar_title.setAlignment(Qt.AlignCenter)
+        self.ar_title.setStyleSheet("""
+            QLabel {
+                color: #12395f;
+                font-size: 32px;
+                font-weight: 900;
+                background: transparent;
+            }
+        """)
+
+        self.en_title = QLabel(LAB_BRANDING["lab_name_en"])
+        self.en_title.setAlignment(Qt.AlignCenter)
+        self.en_title.setStyleSheet("""
+            QLabel {
+                color: #2f6fe4;
+                font-size: 22px;
+                font-weight: 900;
+                background: transparent;
+            }
+        """)
+
+        self.welcome = QLabel("مرحباً بك في نظام إدارة المختبر")
+        self.welcome.setAlignment(Qt.AlignCenter)
+        self.welcome.setStyleSheet("""
+            QLabel {
+                color: #5f7188;
+                font-size: 15px;
+                font-weight: 700;
+                background: transparent;
+            }
+        """)
+
+        self.subtitle = QLabel("جاري تجهيز النظام...")
+        self.subtitle.setAlignment(Qt.AlignCenter)
+        self.subtitle.setStyleSheet("""
+            QLabel {
+                color: #28415f;
+                font-size: 16px;
+                font-weight: 800;
+                background: transparent;
+            }
+        """)
+
+        self.progress = QProgressBar()
+        self.progress.setFixedHeight(14)
+        self.progress.setTextVisible(False)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                background-color: #e8f0fa;
+                border: none;
+                border-radius: 7px;
+            }
+            QProgressBar::chunk {
+                background-color: #2f6fe4;
+                border-radius: 7px;
+            }
+        """)
+
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 4, 0, 0)
+
+        version_lbl = QLabel(f"الإصدار {APP_VERSION}")
+        version_lbl.setStyleSheet("""
+            QLabel {
+                color: #7f91a8;
+                font-size: 12px;
+                font-weight: 800;
+                background: transparent;
+            }
+        """)
+
+        system_lbl = QLabel("Laboratory Management System")
+        system_lbl.setAlignment(Qt.AlignRight)
+        system_lbl.setStyleSheet("""
+            QLabel {
+                color: #7f91a8;
+                font-size: 12px;
+                font-weight: 800;
+                background: transparent;
+            }
+        """)
+
+        footer_row.addWidget(version_lbl)
+        footer_row.addStretch(1)
+        footer_row.addWidget(system_lbl)
+
+        outer.addWidget(self.logo, 0, Qt.AlignCenter)
+        outer.addSpacing(4)
+        outer.addWidget(self.ar_title)
+        outer.addWidget(self.en_title)
+        outer.addWidget(self.welcome)
+        outer.addSpacing(16)
+        outer.addWidget(self.subtitle)
+        outer.addWidget(self.progress)
+        outer.addLayout(footer_row)
+
+        wrapper = QVBoxLayout()
+        wrapper.setContentsMargins(18, 18, 18, 18)
+        wrapper.addWidget(shell)
+
+        root = QWidget()
+        root.setLayout(wrapper)
+        root.setAttribute(Qt.WA_TranslucentBackground)
+
+        self.setCentralWidget(root)
+
+        self.fade_effect = QGraphicsOpacityEffect(self)
+        root.setGraphicsEffect(self.fade_effect)
+        self.fade_effect.setOpacity(0.0)
+
+        self.fade_anim = QPropertyAnimation(self.fade_effect, b"opacity", self)
+        self.fade_anim.setDuration(900)
+        self.fade_anim.setStartValue(0.0)
+        self.fade_anim.setEndValue(1.0)
+        self.fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.fade_anim.start()
 
 
+
+    def update_progress(self, value: int, text: str):
+        self.progress.setValue(value)
+        self.subtitle.setText(text)
+        QApplication.processEvents()
 
 
 
@@ -1735,15 +1949,40 @@ def main():
     if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
         sys.exit(0)
 
-    init_db()
     app = QApplication(sys.argv)
+
+    splash = SplashScreen()
+    splash.show()
+
+    start_time = time.time()
+
+    splash.update_progress(10, "تهيئة النظام...")
+
+    init_db()
+
+    splash.update_progress(40, "تحميل الإعدادات...")
 
     apply_global_theme(app, dark=False)
 
+    splash.update_progress(70, "تجهيز الواجهة...")
+
     window = MainWindow()
+
+    splash.update_progress(100, "تم التشغيل")
+
+    elapsed = time.time() - start_time
+    remaining = max(0, 5 - elapsed)
+    end_time = time.time() + remaining
+
+    while time.time() < end_time:
+        QApplication.processEvents()
+
     window.show()
+    splash.close()
 
     sys.exit(app.exec())
+
+
 
 
 if __name__ == "__main__":
