@@ -177,10 +177,61 @@ class TestsWindow(QWidget):
         self.btn_back = QPushButton("رجوع")
         self.btn_print = QPushButton("طباعة")
         self.btn_pdf = QPushButton("PDF")
+        self.btn_paid = QPushButton("تم الدفع")
+        self.btn_paid.setCheckable(True)
+
 
         self.btn_back.setMinimumHeight(38)
         self.btn_print.setMinimumHeight(38)
         self.btn_pdf.setMinimumHeight(38)
+        self.btn_paid.setMinimumHeight(38)
+        self.btn_paid.setCursor(Qt.PointingHandCursor)
+        self.btn_paid.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #146c37;
+                border: 1px solid #b7e4c7;
+                border-radius: 16px;
+                padding: 9px 18px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+
+            QPushButton:hover {
+                background-color: #f0fff4;
+                border: 2px solid #52b788;
+                color: #0f5132;
+            }
+
+            QPushButton:pressed {
+                background-color: #d8f3dc;
+                border: 2px solid #40916c;
+                padding-top: 11px;
+                padding-bottom: 7px;
+            }
+
+            QPushButton:checked {
+                background-color: #d8f3dc;
+                color: #0f5132;
+                border: 2px solid #2d6a4f;
+            }
+
+            QPushButton:checked:hover {
+                background-color: #b7e4c7;
+                border: 2px solid #1b4332;
+            }
+
+            QPushButton:checked:pressed {
+                background-color: #95d5b2;
+                border: 2px solid #1b4332;
+                padding-top: 11px;
+                padding-bottom: 7px;
+            }
+        """)
+
+        self.btn_paid.setMinimumWidth(110)
+
+
 
         self.btn_back.clicked.connect(self.close)
         self.btn_print.clicked.connect(self.on_print_clicked)
@@ -188,6 +239,7 @@ class TestsWindow(QWidget):
 
         toolbar.addWidget(self.btn_print)
         toolbar.addWidget(self.btn_pdf)
+        toolbar.addWidget(self.btn_paid)
         toolbar.addStretch(1)
         toolbar.addWidget(self.btn_back)
 
@@ -1042,12 +1094,13 @@ class TestsWindow(QWidget):
             with get_conn() as conn:
                 footer_text = get_lab_setting(conn, "footer_text", "")
 
-            pdf_path = make_pdf_report(
-                self._patient_obj(),
-                self.report_id,
-                grouped,
-                footer_text=footer_text,
-            )
+                pdf_path = make_pdf_report(
+                    self._patient_obj(),
+                    self.report_id,
+                    grouped,
+                    footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
+                )
             print_pdf(pdf_path)
             self._report_finalized = True
 
@@ -1069,12 +1122,13 @@ class TestsWindow(QWidget):
             with get_conn() as conn:
                 footer_text = get_lab_setting(conn, "footer_text", "")
 
-            temp_pdf = make_pdf_report(
-                self._patient_obj(),
-                self.report_id,
-                grouped,
-                footer_text=footer_text,
-            )
+                temp_pdf = make_pdf_report(
+                    self._patient_obj(),
+                    self.report_id,
+                    grouped,
+                    footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
+                )
 
             patient = self._patient_obj()
             patient_name = getattr(patient, "name", "") or "patient"

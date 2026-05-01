@@ -665,13 +665,44 @@ def _draw_whatsapp_qr(c: canvas.Canvas, x: float, y: float, size: float, phone_n
 
 
 
+def _draw_paid_marker(c: canvas.Canvas, width: float, height: float, paid_marker: bool = False) -> None:
+    box_x = 0.55 * cm
+    box_y = height - 0.90 * cm
+    box_size = 0.35 * cm
+
+    c.saveState()
+
+    c.setStrokeColorRGB(0.0, 0.35, 0.75)
+    c.setLineWidth(0.8)
+    c.rect(box_x, box_y, box_size, box_size, stroke=1, fill=0)
+
+    if paid_marker:
+        c.setFillColorRGB(0.0, 0.65, 0.20)
+        c.circle(
+            box_x + box_size / 2,
+            box_y + box_size / 2,
+            0.10 * cm,
+            stroke=0,
+            fill=1,
+        )
+
+    c.restoreState()
 
 
 
-def _draw_lab_header(c: canvas.Canvas, patient, report_id: str, width: float, height: float) -> float:
+
+def _draw_lab_header(
+    c: canvas.Canvas,
+    patient,
+    report_id: str,
+    width: float,
+    height: float,
+    paid_marker: bool = False,
+) -> float:
     LEFT_X = 2.0 * cm
     RIGHT_X = width - 2.0 * cm
     CENTER_X = width / 2
+    _draw_paid_marker(c, width, height, paid_marker)
 
     arabic_font = _ensure_arabic_font_registered()
     english_font = _ensure_english_header_font_registered()
@@ -964,6 +995,7 @@ def make_pdf_report(
     grouped_results: dict[str, list[dict]],
     footer_text: str = "",
     flag_header: str = "Flag",
+    paid_marker: bool = False,
 ) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
 
@@ -993,7 +1025,7 @@ def make_pdf_report(
     is_sfa_report = report_categories == sfa_categories
 
     def draw_header() -> float:
-        return _draw_lab_header(c, patient, report_id, width, height)
+        return _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     def draw_table_header(y: float) -> float:
         if is_sfa_report:
@@ -1171,13 +1203,16 @@ def make_pdf_report(
             flag = str(r.get("flag", "") or "").strip()
             titer = str(r.get("titer", "") or "").strip()
 
+            ranges = r.get("ranges", []) or []
+            matched = r.get("matched_range")
+
+            if not unit and ranges:
+                unit = str(ranges[0].get("unit", "") or "").strip()
+
             if str(category).strip().lower() == "titers":
                 result_display = result
             else:
                 result_display = f"{result} {unit}".strip() if unit else result
-
-            ranges = r.get("ranges", []) or []
-            matched = r.get("matched_range")
 
             range_lines: list[tuple[str, str, bool]] = []
             for row in ranges:
@@ -1310,6 +1345,7 @@ def make_pdf_gue_report(
     report_id: str,
     rows: list[dict],
     footer_text: str = "",
+    paid_marker: bool = False,
 ) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
 
@@ -1400,7 +1436,7 @@ def make_pdf_gue_report(
         if raw_name not in physical_set and raw_name not in micro_set:
             micro_rows.append((pretty_label(raw_name), result))
 
-    y = _draw_lab_header(c, patient, report_id, width, height)
+    y = _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     # main title lower than before
     c.setFillColorRGB(0, 0, 0)
@@ -1466,7 +1502,7 @@ def make_pdf_gue_report(
 
 
 
-def make_pdf_gse_report(patient, report_id: str, rows: list[dict], footer_text: str = "") -> Path:
+def make_pdf_gse_report(patient, report_id: str, rows: list[dict], footer_text: str = "", paid_marker: bool = False) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
     filename = f"gse_{date_iso}_{report_id[:8]}.pdf"
     out_path = get_temp_pdf_path(_safe_filename(filename))
@@ -1476,7 +1512,7 @@ def make_pdf_gse_report(patient, report_id: str, rows: list[dict], footer_text: 
 
     settings = _get_print_settings()
 
-    y = _draw_lab_header(c, patient, report_id, width, height)
+    y = _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     # title
     y -= 1.2 * cm
@@ -1563,6 +1599,7 @@ def make_pdf_hvs_report(
     report_id: str,
     rows: list[dict],
     footer_text: str = "",
+    paid_marker: bool = False,
 ) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
 
@@ -1610,7 +1647,7 @@ def make_pdf_hvs_report(
     ]
 
     # draw standard lab header
-    y = _draw_lab_header(c, patient, report_id, width, height)
+    y = _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     # move a bit lower
     y -= 0.3 * cm
@@ -1687,6 +1724,7 @@ def make_pdf_sputum_report(
     report_id: str,
     rows: list[dict],
     footer_text: str = "",
+    paid_marker: bool = False,
 ) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
 
@@ -1745,7 +1783,7 @@ def make_pdf_sputum_report(
     # -------------------------
     # Draw header only
     # -------------------------
-    y = _draw_lab_header(c, patient, report_id, width, height)
+    y = _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     # leave blank space after header/patient box
     y -= 1.4 * cm
@@ -1823,6 +1861,7 @@ def make_pdf_culture_report(
     report_id: str,
     grouped_results: dict[str, list[dict]],
     footer_text: str = "",
+    paid_marker: bool = False,
 ) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
     filename = f"culture_{date_iso}_{report_id[:8]}.pdf"
@@ -1836,7 +1875,7 @@ def make_pdf_culture_report(
     RIGHT_X = width - 2.0 * cm
     CENTER_X = width / 2
 
-    y = _draw_lab_header(c, patient, report_id, width, height)
+    y = _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
 
     culture_rows = grouped_results.get("Culture", [])
     antibiotics_rows = grouped_results.get("Antibiotics", [])
@@ -1989,7 +2028,7 @@ def make_pdf_culture_report(
 
 
 
-def make_pdf_cbc_overlay(patient, report_id: str, footer_text: str = "") -> Path:
+def make_pdf_cbc_overlay(patient, report_id: str, footer_text: str = "", paid_marker: bool = False) -> Path:
     date_iso = _patient_field(patient, "date_iso", "date")
 
     filename = f"cbc_{date_iso}_{report_id[:8]}.pdf"
@@ -1998,7 +2037,7 @@ def make_pdf_cbc_overlay(patient, report_id: str, footer_text: str = "") -> Path
     width, height = A4
     settings = _get_print_settings()
 
-    _draw_lab_header(c, patient, report_id, width, height)
+    _draw_lab_header(c, patient, report_id, width, height, paid_marker=paid_marker)
     _draw_lab_footer(c, width, settings,footer_text)
 
     c.save()

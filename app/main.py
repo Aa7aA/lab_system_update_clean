@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QProgressBar,
     QGraphicsOpacityEffect,
+    QDialog,
 )
 
 from .db import get_conn, init_db, get_lab_setting, set_lab_setting, backup_database
@@ -1730,7 +1731,158 @@ class MainWindow(QMainWindow):
         return
 
 
+    def ask_cbc_payment_status(self) -> bool | None:
+        dlg = QDialog(self)
+        dlg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        dlg.setModal(True)
+        dlg.setFixedSize(420, 230)
+        dlg.setLayoutDirection(Qt.RightToLeft)
+
+        shell = QFrame(dlg)
+        shell.setObjectName("PaymentDialog")
+        shell.setStyleSheet("""
+            QFrame#PaymentDialog {
+                background-color: #ffffff;
+                border: 1px solid #dbe6f2;
+                border-radius: 22px;
+            }
+            QLabel {
+                background: transparent;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect(dlg)
+        shadow.setBlurRadius(35)
+        shadow.setOffset(0, 8)
+        shadow.setColor(QColor(31, 59, 87, 70))
+        shell.setGraphicsEffect(shadow)
+
+        root = QVBoxLayout(dlg)
+        root.setContentsMargins(14, 14, 14, 14)
+        root.addWidget(shell)
+
+        layout = QVBoxLayout(shell)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+
+        title = QLabel("حالة الدفع")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("""
+            QLabel {
+                color: #12385c;
+                font-size: 22px;
+                font-weight: 900;
+            }
+        """)
+
+        subtitle = QLabel("هل تم دفع أجور تحليل CBC؟")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setStyleSheet("""
+            QLabel {
+                color: #4f6f8f;
+                font-size: 15px;
+                font-weight: 800;
+            }
+        """)
+
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+
+        btn_paid = QPushButton("تم الدفع")
+        btn_unpaid = QPushButton("لم يتم الدفع")
+        btn_cancel = QPushButton("إلغاء")
+
+        for btn in (btn_paid, btn_unpaid, btn_cancel):
+            btn.setMinimumHeight(42)
+            btn.setCursor(Qt.PointingHandCursor)
+
+        btn_paid.setStyleSheet("""
+            QPushButton {
+                background-color: #dff5e7;
+                color: #146c37;
+                border: 2px solid #2fa866;
+                border-radius: 14px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+            QPushButton:hover {
+                background-color: #b7e4c7;
+                border: 2px solid #1b4332;
+            }
+        """)
+
+        btn_unpaid.setStyleSheet("""
+            QPushButton {
+                background-color: #eef5ff;
+                color: #16324f;
+                border: 2px solid #7aaef0;
+                border-radius: 14px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+            QPushButton:hover {
+                background-color: #dcecff;
+                border: 2px solid #3a7afe;
+            }
+        """)
+
+        btn_cancel.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #9a3412;
+                border: 1px solid #fed7aa;
+                border-radius: 14px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+            QPushButton:hover {
+                background-color: #fff7ed;
+                border: 1px solid #fdba74;
+            }
+        """)
+
+        result = {"value": None}
+
+        def choose_paid():
+            result["value"] = True
+            dlg.accept()
+
+        def choose_unpaid():
+            result["value"] = False
+            dlg.accept()
+
+        def cancel():
+            result["value"] = None
+            dlg.reject()
+
+        btn_paid.clicked.connect(choose_paid)
+        btn_unpaid.clicked.connect(choose_unpaid)
+        btn_cancel.clicked.connect(cancel)
+
+        btn_row.addWidget(btn_paid)
+        btn_row.addWidget(btn_unpaid)
+        btn_row.addWidget(btn_cancel)
+
+        layout.addStretch(1)
+        layout.addLayout(btn_row)
+
+        dlg.exec()
+        return result["value"]
+
+
+
     def open_cbc_directly(self, patient: PatientData, report_id: str):
+        paid_marker = self.ask_cbc_payment_status()
+
+        if paid_marker is None:
+            return
+
         try:
             with get_conn() as conn:
                 footer_text = get_lab_setting(conn, "footer_text", "")
@@ -1739,6 +1891,7 @@ class MainWindow(QMainWindow):
                 patient,
                 report_id,
                 footer_text=footer_text,
+                paid_marker=paid_marker,
             )
 
             os.startfile(str(pdf_path))

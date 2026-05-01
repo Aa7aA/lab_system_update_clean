@@ -192,10 +192,58 @@ class ModuleWindow(QWidget):
         self.btn_back = QPushButton("رجوع")
         self.btn_print = QPushButton("طباعة")
         self.btn_pdf = QPushButton("PDF")
+        self.btn_paid = QPushButton("تم الدفع")
+        self.btn_paid.setCheckable(True)
 
         self.btn_back.setMinimumHeight(34)
         self.btn_print.setMinimumHeight(34)
         self.btn_pdf.setMinimumHeight(34)
+        self.btn_paid.setMinimumHeight(34)
+        self.btn_paid.setCursor(Qt.PointingHandCursor)
+        self.btn_paid.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #146c37;
+                border: 1px solid #b7e4c7;
+                border-radius: 16px;
+                padding: 9px 18px;
+                font-size: 14px;
+                font-weight: 900;
+            }
+
+            QPushButton:hover {
+                background-color: #f0fff4;
+                border: 2px solid #52b788;
+                color: #0f5132;
+            }
+
+            QPushButton:pressed {
+                background-color: #d8f3dc;
+                border: 2px solid #40916c;
+                padding-top: 11px;
+                padding-bottom: 7px;
+            }
+
+            QPushButton:checked {
+                background-color: #d8f3dc;
+                color: #0f5132;
+                border: 2px solid #2d6a4f;
+            }
+
+            QPushButton:checked:hover {
+                background-color: #b7e4c7;
+                border: 2px solid #1b4332;
+            }
+
+            QPushButton:checked:pressed {
+                background-color: #95d5b2;
+                border: 2px solid #1b4332;
+                padding-top: 11px;
+                padding-bottom: 7px;
+            }
+        """)
+
+        self.btn_paid.setMinimumWidth(110)
 
         self.btn_back.clicked.connect(self.close)
         self.btn_print.clicked.connect(self.on_print_clicked)
@@ -203,6 +251,7 @@ class ModuleWindow(QWidget):
 
         toolbar.addWidget(self.btn_print)
         toolbar.addWidget(self.btn_pdf)
+        toolbar.addWidget(self.btn_paid)
         toolbar.addStretch(1)
         toolbar.addWidget(self.btn_back)
 
@@ -551,6 +600,7 @@ class ModuleWindow(QWidget):
                     self.report_id,
                     rows,
                     footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
                 )
             elif self.module_code.strip().lower() == "gse":
                 temp_pdf = make_pdf_gse_report(
@@ -558,6 +608,7 @@ class ModuleWindow(QWidget):
                     self.report_id,
                     rows,
                     footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
                 )
             elif self.module_code.strip().lower() in {"sputum", "sputum+"}:
                 temp_pdf = make_pdf_sputum_report(
@@ -565,6 +616,7 @@ class ModuleWindow(QWidget):
                     self.report_id,
                     rows,
                     footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
                 )
             elif self.module_code.strip().lower() == "torch":
                 merged_rows = self._merge_torch_rows_for_pdf(rows)
@@ -575,6 +627,7 @@ class ModuleWindow(QWidget):
                     grouped,
                     footer_text=footer_text,
                     flag_header="Titer",
+                    paid_marker=self.btn_paid.isChecked(),
                 )
             else:
                 grouped = group_results(rows)
@@ -583,6 +636,7 @@ class ModuleWindow(QWidget):
                     self.report_id,
                     grouped,
                     footer_text=footer_text,
+                    paid_marker=self.btn_paid.isChecked(),
                 )
 
             print_pdf(temp_pdf)
@@ -609,6 +663,7 @@ class ModuleWindow(QWidget):
                         self.report_id,
                         rows,
                         footer_text=footer_text,
+                        paid_marker=self.btn_paid.isChecked(),
                     )
                 elif self.module_code.strip().lower() == "gse":
                     temp_pdf = make_pdf_gse_report(
@@ -616,6 +671,7 @@ class ModuleWindow(QWidget):
                         self.report_id,
                         rows,
                         footer_text=footer_text,
+                        paid_marker=self.btn_paid.isChecked(),
                     )
                 elif self.module_code.strip().lower() == "torch":
                     merged_rows = self._merge_torch_rows_for_pdf(rows)
@@ -626,6 +682,7 @@ class ModuleWindow(QWidget):
                         grouped,
                         footer_text=footer_text,
                         flag_header="Titer",
+                        paid_marker=self.btn_paid.isChecked(),
                     )
                 elif self.module_code.strip().lower() in {"sputum", "sputum+"}:
                     temp_pdf = make_pdf_sputum_report(
@@ -633,6 +690,7 @@ class ModuleWindow(QWidget):
                         self.report_id,
                         rows,
                         footer_text=footer_text,
+                        paid_marker=self.btn_paid.isChecked(),
                     )
                 else:
                     grouped = group_results(rows)
@@ -641,6 +699,7 @@ class ModuleWindow(QWidget):
                         self.report_id,
                         grouped,
                         footer_text=footer_text,
+                        paid_marker=self.btn_paid.isChecked(),
                     )
 
                 patient = self._patient_obj()
@@ -1591,14 +1650,21 @@ class ModuleWindow(QWidget):
                 unit = ""
                 flag = ""
 
-                if isinstance(widget, QLineEdit) and matched:
-                    mode = str(matched.get("range_mode", "none") or "none").strip()
-                    normal_text = str(matched.get("normal_text", "") or "").strip()
+                if isinstance(widget, QLineEdit):
+                    range_rows = self._range_rows(category, test_name)
 
-                    if mode != "multiple" and not normal_text:
-                        unit = str(matched.get("unit", "") or "").strip()
-                        flag = self._calc_flag(category, test_name, value)
+                    if range_rows:
+                        first_mode = str(range_rows[0].get("range_mode", "none") or "none").strip()
 
+                        if first_mode == "multiple":
+                            unit = str(range_rows[0].get("unit", "") or "").strip()
+
+                        elif matched:
+                            normal_text = str(matched.get("normal_text", "") or "").strip()
+
+                            if not normal_text:
+                                unit = str(matched.get("unit", "") or "").strip()
+                                flag = self._calc_flag(category, test_name, value)
                 conn.execute(
                     """
                     INSERT INTO report_results(report_id, module, category, test_name, result, unit, flag)
