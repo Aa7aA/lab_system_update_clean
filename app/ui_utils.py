@@ -1087,6 +1087,8 @@ def make_pdf_report(
             # first line of row
             row_height = 0.62 * cm
 
+
+
             # extra lines if multiple ranges are printed
             if range_count > 1:
                 row_height += (range_count - 1) * 0.58 * cm
@@ -1135,6 +1137,7 @@ def make_pdf_report(
 
     y = draw_header()
     y = draw_table_header(y)
+    previous_rows_for_bottom: list[dict] = []
 
     category_order = list(grouped_results.keys())
 
@@ -1196,6 +1199,15 @@ def make_pdf_report(
         y -= 0.55 * cm
 
         for r in rows:
+
+
+            if r.get("is_previous_result"):
+                previous_rows_for_bottom.append(r)
+                continue
+
+
+
+
 
             test = str(r.get("test_name", "") or "")
             result = str(r.get("result", "") or "")
@@ -1331,6 +1343,133 @@ def make_pdf_report(
         c.line(LEFT_X, y, RIGHT_X, y)
 
         y -= 0.35 * cm
+
+
+
+    if previous_rows_for_bottom:
+        arabic_font = _ensure_arabic_font_registered()
+
+        # Footer QR reaches high on the left, so keep comparison box safely above footer/QR.
+        SAFE_BOX_BOTTOM = 5.85 * cm
+        BOX_LEFT = LEFT_X
+        BOX_RIGHT = RIGHT_X
+        MAX_ROWS_PER_BOX = 3
+
+        def previous_row_height() -> float:
+            return 1.15 * cm
+
+        def draw_previous_box(rows_chunk: list[dict]) -> None:
+            box_height = 1.15 * cm + (len(rows_chunk) * previous_row_height())
+            box_bottom = SAFE_BOX_BOTTOM
+            box_top = box_bottom + box_height
+
+            c.setStrokeColorRGB(0.0, 0.20, 0.55)
+            c.setLineWidth(0.9)
+            c.roundRect(
+                BOX_LEFT,
+                box_bottom,
+                BOX_RIGHT - BOX_LEFT,
+                box_top - box_bottom,
+                0.25 * cm,
+                stroke=1,
+                fill=0,
+            )
+
+            title_y = box_top - 0.45 * cm
+
+            c.setFillColorRGB(0.0, 0.20, 0.55)
+            c.setFont(arabic_font, 13)
+            c.drawRightString(
+                BOX_RIGHT - 0.35 * cm,
+                title_y,
+                _ar("نتائج سابقة للمقارنة فقط")
+            )
+
+            c.setStrokeColorRGB(0.0, 0.20, 0.55)
+            c.setLineWidth(0.7)
+            c.line(
+                BOX_LEFT + 0.35 * cm,
+                title_y - 0.28 * cm,
+                BOX_RIGHT - 0.35 * cm,
+                title_y - 0.28 * cm,
+            )
+
+            py = title_y - 0.72 * cm
+
+            for prev in rows_chunk:
+                previous_date = str(prev.get("previous_date", "") or "").strip()
+
+                c.setFillColorRGB(0.15, 0.25, 0.40)
+                c.setFont(arabic_font, 10.5)
+                c.drawRightString(
+                    BOX_RIGHT - 0.45 * cm,
+                    py,
+                    _ar(f"تم إجراء نفس التحليل في هذا المختبر بتاريخ: {previous_date}")
+                )
+
+                py -= 0.46 * cm
+
+                test = str(prev.get("test_name", "") or "")
+                result = str(prev.get("result", "") or "")
+                unit = str(prev.get("unit", "") or "").strip()
+                flag = str(prev.get("flag", "") or "").strip()
+                result_display = f"{result} {unit}".strip() if unit else result
+
+                c.setFillColorRGB(0, 0, 0)
+                c.setFont("Helvetica-Bold", 10.5)
+                c.drawString(X_TEST + 0.35 * cm, py, test[:45])
+
+                if flag == "H":
+                    c.setFillColorRGB(0.75, 0.0, 0.12)
+                elif flag == "L":
+                    c.setFillColorRGB(0.04, 0.34, 0.82)
+                elif flag == "N":
+                    c.setFillColorRGB(0.00, 0.55, 0.20)
+                else:
+                    c.setFillColorRGB(0, 0, 0)
+
+                c.setFont("Helvetica-Bold", 10.5)
+                c.drawString(X_RESULT, py, result_display[:22])
+                c.drawString(X_FLAG, py, flag)
+
+                ranges = prev.get("ranges", []) or []
+                matched = prev.get("matched_range")
+
+                range_text = ""
+                if matched:
+                    _, range_text = format_one_range(matched)
+                elif ranges:
+                    _, range_text = format_one_range(ranges[0])
+
+                if range_text:
+                    c.drawRightString(X_RANGE - 0.35 * cm, py, range_text[:50])
+
+                py -= 0.32 * cm
+
+                c.setStrokeColorRGB(0.78, 0.86, 0.96)
+                c.setLineWidth(0.6)
+                c.line(BOX_LEFT + 0.35 * cm, py, BOX_RIGHT - 0.35 * cm, py)
+
+                py -= 0.37 * cm
+
+        chunks = [
+            previous_rows_for_bottom[i:i + MAX_ROWS_PER_BOX]
+            for i in range(0, len(previous_rows_for_bottom), MAX_ROWS_PER_BOX)
+        ]
+
+        for idx, chunk in enumerate(chunks):
+            needed_box_height = 1.15 * cm + (len(chunk) * previous_row_height())
+            needed_top = SAFE_BOX_BOTTOM + needed_box_height
+
+            if idx > 0:
+                y = new_page()
+            elif y < needed_top + 0.4 * cm:
+                y = new_page()
+
+            draw_previous_box(chunk)
+
+
+
 
     _draw_lab_footer(c, width, settings, footer_text)
     c.save()

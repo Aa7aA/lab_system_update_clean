@@ -26,11 +26,18 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 
-from .db import get_conn, get_lab_setting
+from .db import (
+    get_conn,
+    get_lab_setting,
+    find_latest_previous_report,
+    fetch_report_rows_for_pdf,
+    is_previous_results_enabled,
+)
 from .ui_builders import build_antibiotics_table_three_columns
 from .ui_utils import (
     make_pdf_culture_report,
     print_pdf_and_delete,
+    print_pdf,
     save_pdf_automatically,
     widget_set_value,
     group_results,
@@ -160,12 +167,21 @@ class CultureWindow(QMainWindow):
         self.btn_print = QPushButton("طباعة")
         self.btn_pdf = QPushButton("PDF")
         self.btn_paid = QPushButton("تم الدفع")
+        self.btn_prev = QPushButton("Prev")
+
         self.btn_paid.setCheckable(True)
+        self.btn_prev.setEnabled(False)
+        self._previous_report: dict | None = None
+        self._style_prev_button(False)
 
         self.btn_back.setMinimumHeight(34)
         self.btn_print.setMinimumHeight(34)
         self.btn_pdf.setMinimumHeight(34)
         self.btn_paid.setMinimumHeight(34)
+        self.btn_prev.setMinimumHeight(34)
+        self.btn_prev.setMinimumWidth(80)
+        self.btn_prev.setCursor(Qt.PointingHandCursor)
+
         self.btn_paid.setCursor(Qt.PointingHandCursor)
         self.btn_paid.setStyleSheet("""
             QPushButton {
@@ -215,11 +231,13 @@ class CultureWindow(QMainWindow):
         self.btn_back.clicked.connect(self.close)
         self.btn_print.clicked.connect(self.on_print)
         self.btn_pdf.clicked.connect(self.on_pdf)
+        self.btn_prev.clicked.connect(self.on_prev_clicked)
         
 
         toolbar.addWidget(self.btn_print)
         toolbar.addWidget(self.btn_pdf)
         toolbar.addWidget(self.btn_paid)
+        toolbar.addWidget(self.btn_prev)
         toolbar.addStretch(1)
         toolbar.addWidget(self.btn_back)
 
@@ -307,6 +325,7 @@ class CultureWindow(QMainWindow):
         if self.report_id is not None:
             self.load_report_into_fields(self.report_id)
 
+        self._refresh_prev_button()
 
 
 
@@ -478,6 +497,166 @@ class CultureWindow(QMainWindow):
                 )
 
         return report_id, len(results), results
+
+
+
+
+    def _style_prev_button(self, has_previous: bool) -> None:
+        if has_previous:
+            self.btn_prev.setText("Prev ✓")
+            self.btn_prev.setStyleSheet("""
+                QPushButton {
+                    background-color: #1E5EFF;
+                    color: white;
+                    border: 1px solid #1546C8;
+                    border-radius: 8px;
+                    padding: 6px 14px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #2D6BFF;
+                }
+                QPushButton:pressed {
+                    background-color: #1546C8;
+                }
+            """)
+        else:
+            self.btn_prev.setText("Prev")
+            self.btn_prev.setStyleSheet("""
+                QPushButton {
+                    background-color: #D6D9E0;
+                    color: #7A7D85;
+                    border: 1px solid #B9BDC7;
+                    border-radius: 8px;
+                    padding: 6px 14px;
+                    font-weight: bold;
+                }
+            """)
+
+
+    def _refresh_prev_button(self) -> None:
+        patient_name = (getattr(self.patient, "name", "") or "").strip()
+
+
+
+        with get_conn() as conn:
+            feature_enabled = is_previous_results_enabled(conn)
+
+        if not feature_enabled:
+            self._previous_report = None
+            self.btn_prev.setVisible(False)
+            self.btn_prev.setEnabled(False)
+            return
+
+        self.btn_prev.setVisible(True)
+
+
+
+        if not patient_name:
+            self._previous_report = None
+            self.btn_prev.setEnabled(False)
+            self.btn_prev.setToolTip("No patient name")
+            self._style_prev_button(False)
+            return
+
+        with get_conn() as conn:
+            self._previous_report = find_latest_previous_report(
+                conn,
+                patient_name=patient_name,
+                module_code="Culture",
+                current_report_id=self.report_id or "",
+                months=3,
+            )
+
+        if self._previous_report:
+            prev_date = self._previous_report.get("report_date", "")
+            self.btn_prev.setEnabled(True)
+            self.btn_prev.setToolTip(f"Previous Culture report found: {prev_date}")
+            self._style_prev_button(True)
+        else:
+            self.btn_prev.setEnabled(False)
+            self.btn_prev.setToolTip("No previous Culture report found in last 3 months")
+            self._style_prev_button(False)
+
+
+    def _patient_from_previous_report(self, report: dict):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            name=report.get("patient_name", ""),
+            doctor=report.get("doctor_name", ""),
+            gender=report.get("gender", ""),
+            age=report.get("age", ""),
+            patient_id=report.get("patient_code", ""),
+            date_iso=report.get("report_date", ""),
+        )
+
+
+    def _build_previous_pdf(self) -> Path | None:
+        if not self._previous_report:
+            return None
+
+        prev_report_id = str(self._previous_report.get("report_id") or "")
+        if not prev_report_id:
+            return None
+
+        with get_conn() as conn:
+            footer_text = get_lab_setting(conn, "footer_text", "")
+            rows = fetch_report_rows_for_pdf(
+                conn,
+                report_id=prev_report_id,
+                module_code="Culture",
+            )
+
+        if not rows:
+            QMessageBox.information(self, "Prev", "لا توجد نتائج محفوظة للتقرير السابق.")
+            return None
+
+        previous_patient = self._patient_from_previous_report(self._previous_report)
+        grouped = group_results(rows)
+
+        return make_pdf_culture_report(
+            previous_patient,
+            prev_report_id,
+            grouped,
+            footer_text=footer_text,
+            paid_marker=False,
+        )
+
+
+    def on_prev_clicked(self) -> None:
+        if not self._previous_report:
+            QMessageBox.information(self, "Prev", "لا يوجد تقرير سابق خلال آخر 3 أشهر.")
+            return
+
+        prev_date = self._previous_report.get("report_date", "")
+
+        reply = QMessageBox.question(
+            self,
+            "Prev",
+            f"Previous Culture report found on {prev_date}.\n\nDo you want to print it?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            pdf_path = self._build_previous_pdf()
+            if not pdf_path:
+                return
+
+            print_pdf(pdf_path)
+            QMessageBox.information(self, "Prev", "تم إرسال التقرير السابق إلى الطابعة.")
+        except Exception as e:
+            QMessageBox.warning(self, "Prev Error", f"فشل طباعة التقرير السابق:\n{e}")
+
+
+
+
+
+
 
     # ---------------------------------
     # Button actions

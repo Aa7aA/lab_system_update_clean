@@ -31,7 +31,12 @@ from PySide6.QtCore import Qt, QPoint, Signal, QSignalBlocker
 from PySide6.QtGui import QPixmap, QColor
 from PySide6.QtCore import Qt
 
-from .db import get_conn, get_lab_setting
+from .db import (
+    get_conn,
+    get_lab_setting,
+    find_previous_test_results_for_report,
+    is_previous_results_enabled,
+)
 from .ui_builders import (
     build_three_panel_form_with_flags,
     build_single_column_form_with_flags,
@@ -1078,13 +1083,61 @@ class TestsWindow(QWidget):
 
         return merged
 
+    def _attach_previous_results(self, rows: list[dict]) -> list[dict]:
+        patient = self._patient_obj()
+        patient_name = getattr(patient, "name", "") or ""
 
+        if not patient_name or not self.report_id:
+            return rows
+
+        with get_conn() as conn:
+            if not is_previous_results_enabled(conn):
+                return rows
+
+            previous_map = find_previous_test_results_for_report(
+                conn,
+                patient_name=patient_name,
+                current_report_id=self.report_id,
+                months=3,
+            )
+
+        if not previous_map:
+            return rows
+
+        out: list[dict] = []
+
+        for row in rows:
+            out.append(row)
+
+            category = str(row.get("category", "") or "")
+            test_name = str(row.get("test_name", "") or "")
+
+            prev = previous_map.get((category, test_name))
+            if not prev:
+                continue
+
+            out.append(
+                {
+                    "category": category,
+                    "test_name": test_name,
+                    "result": prev.get("result", ""),
+                    "unit": prev.get("unit", ""),
+                    "flag": prev.get("flag", ""),
+                    "ranges": row.get("ranges", []) or [],
+                    "matched_range": row.get("matched_range"),
+                    "is_previous_result": True,
+                    "previous_date": prev.get("previous_date", ""),
+                }
+            )
+
+        return out
 
     def on_print_clicked(self) -> None:
         try:
             self.save_results()
             rows = self._fetch_rows_for_pdf()
             rows = self._merge_titers_rows_for_pdf(rows)
+            rows = self._attach_previous_results(rows)
             if not rows:
                 QMessageBox.information(self, "الطباعة", "لا توجد نتائج للطباعة.")
                 return
@@ -1113,6 +1166,7 @@ class TestsWindow(QWidget):
             self.save_results()
             rows = self._fetch_rows_for_pdf()
             rows = self._merge_titers_rows_for_pdf(rows)
+            rows = self._attach_previous_results(rows)
             if not rows:
                 QMessageBox.information(self, "PDF", "لا توجد نتائج لتصديرها.")
                 return

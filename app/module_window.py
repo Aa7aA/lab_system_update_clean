@@ -31,7 +31,13 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 
-from .db import get_conn, get_lab_setting
+from .db import (
+    get_conn,
+    get_lab_setting,
+    find_latest_previous_report,
+    fetch_report_rows_for_pdf,
+    is_previous_results_enabled,
+)
 from .ui_builders import (
     build_three_panel_form_with_flags,
     build_single_column_form_with_flags,
@@ -193,12 +199,22 @@ class ModuleWindow(QWidget):
         self.btn_print = QPushButton("طباعة")
         self.btn_pdf = QPushButton("PDF")
         self.btn_paid = QPushButton("تم الدفع")
+        self.btn_prev = QPushButton("Prev")
+        self._style_prev_button(False)
+
         self.btn_paid.setCheckable(True)
+        self.btn_prev.setEnabled(False)
+        self._previous_report: dict | None = None
 
         self.btn_back.setMinimumHeight(34)
         self.btn_print.setMinimumHeight(34)
         self.btn_pdf.setMinimumHeight(34)
         self.btn_paid.setMinimumHeight(34)
+        self.btn_prev.setMinimumHeight(34)
+        self.btn_prev.setMinimumWidth(80)
+        self.btn_prev.setCursor(Qt.PointingHandCursor)
+
+
         self.btn_paid.setCursor(Qt.PointingHandCursor)
         self.btn_paid.setStyleSheet("""
             QPushButton {
@@ -248,10 +264,12 @@ class ModuleWindow(QWidget):
         self.btn_back.clicked.connect(self.close)
         self.btn_print.clicked.connect(self.on_print_clicked)
         self.btn_pdf.clicked.connect(self.on_pdf_clicked)
+        self.btn_prev.clicked.connect(self.on_prev_clicked)
 
         toolbar.addWidget(self.btn_print)
         toolbar.addWidget(self.btn_pdf)
         toolbar.addWidget(self.btn_paid)
+        toolbar.addWidget(self.btn_prev)
         toolbar.addStretch(1)
         toolbar.addWidget(self.btn_back)
 
@@ -287,6 +305,7 @@ class ModuleWindow(QWidget):
         self._registry: list[tuple[str, str, Any, str]] = []
 
         self.build_tabs_from_db()
+        self._refresh_prev_button()
         
 
     def add_soft_shadow(self, widget, blur=28, x=0, y=6, alpha=30):
@@ -578,6 +597,216 @@ class ModuleWindow(QWidget):
 
         return merged
 
+
+    def _style_prev_button(self, has_previous: bool) -> None:
+        if has_previous:
+            self.btn_prev.setText("Prev ✓")
+
+            self.btn_prev.setStyleSheet("""
+                QPushButton {
+                    background-color: #1E5EFF;
+                    color: white;
+                    border: 1px solid #1546C8;
+                    border-radius: 8px;
+                    padding: 6px 14px;
+                    font-weight: bold;
+                }
+
+                QPushButton:hover {
+                    background-color: #2D6BFF;
+                }
+
+                QPushButton:pressed {
+                    background-color: #1546C8;
+                }
+            """)
+        else:
+            self.btn_prev.setText("Prev")
+
+            self.btn_prev.setStyleSheet("""
+                QPushButton {
+                    background-color: #D6D9E0;
+                    color: #7A7D85;
+                    border: 1px solid #B9BDC7;
+                    border-radius: 8px;
+                    padding: 6px 14px;
+                    font-weight: bold;
+                }
+            """)
+
+
+
+
+    def _refresh_prev_button(self) -> None:
+        patient = self._patient_obj()
+        patient_name = getattr(patient, "name", "") or ""
+
+        with get_conn() as conn:
+            feature_enabled = is_previous_results_enabled(conn)
+
+        if not feature_enabled:
+            self._previous_report = None
+            self.btn_prev.setVisible(False)
+            self.btn_prev.setEnabled(False)
+            return
+
+        self.btn_prev.setVisible(True)
+
+
+        if not patient_name:
+            self._previous_report = None
+            self.btn_prev.setEnabled(False)
+            return
+
+        # CBC is not handled here. Tests has its own comparison system.
+        if self.module_code.strip().lower() in {"cbc", "tests"}:
+            self._previous_report = None
+            self.btn_prev.setEnabled(False)
+            return
+
+        with get_conn() as conn:
+            self._previous_report = find_latest_previous_report(
+                conn,
+                patient_name=patient_name,
+                module_code=self.module_code,
+                current_report_id=self.report_id,
+                months=3,
+            )
+
+        if self._previous_report:
+            prev_date = self._previous_report.get("report_date", "")
+
+            self.btn_prev.setEnabled(True)
+            self.btn_prev.setToolTip(f"Previous report found: {prev_date}")
+
+            self._style_prev_button(True)
+
+        else:
+            self.btn_prev.setEnabled(False)
+            self.btn_prev.setToolTip("No previous report found in last 3 months")
+
+            self._style_prev_button(False)
+
+
+    def _patient_from_previous_report(self, report: dict):
+        return SimpleNamespace(
+            name=report.get("patient_name", ""),
+            doctor=report.get("doctor_name", ""),
+            gender=report.get("gender", ""),
+            age=report.get("age", ""),
+            patient_id=report.get("patient_code", ""),
+            date_iso=report.get("report_date", ""),
+        )
+
+
+    def _build_previous_pdf(self) -> Path | None:
+        if not self._previous_report:
+            return None
+
+        prev_report_id = str(self._previous_report.get("report_id") or "")
+        if not prev_report_id:
+            return None
+
+        with get_conn() as conn:
+            footer_text = get_lab_setting(conn, "footer_text", "")
+            rows = fetch_report_rows_for_pdf(
+                conn,
+                report_id=prev_report_id,
+                module_code=self.module_code,
+            )
+
+        if not rows:
+            QMessageBox.information(self, "Prev", "لا توجد نتائج محفوظة للتقرير السابق.")
+            return None
+
+        patient = self._patient_from_previous_report(self._previous_report)
+        module_key = self.module_code.strip().lower()
+
+        if module_key == "gue":
+            return make_pdf_gue_report(
+                patient,
+                prev_report_id,
+                rows,
+                footer_text=footer_text,
+                paid_marker=False,
+            )
+
+        if module_key == "gse":
+            return make_pdf_gse_report(
+                patient,
+                prev_report_id,
+                rows,
+                footer_text=footer_text,
+                paid_marker=False,
+            )
+        
+        if module_key == "hvs":
+            return make_pdf_hvs_report(
+                patient,
+                prev_report_id,
+                rows,
+                footer_text=footer_text,
+                paid_marker=False,
+            )
+
+        if module_key in {"sputum", "sputum+"}:
+            return make_pdf_sputum_report(
+                patient,
+                prev_report_id,
+                rows,
+                footer_text=footer_text,
+                paid_marker=False,
+            )
+
+        if module_key == "torch":
+            merged_rows = self._merge_torch_rows_for_pdf(rows)
+            grouped = group_results(merged_rows)
+            return make_pdf_report(
+                patient,
+                prev_report_id,
+                grouped,
+                footer_text=footer_text,
+                flag_header="Titer",
+                paid_marker=False,
+            )
+
+        grouped = group_results(rows)
+        return make_pdf_report(
+            patient,
+            prev_report_id,
+            grouped,
+            footer_text=footer_text,
+            paid_marker=False,
+        )
+
+
+    def on_prev_clicked(self) -> None:
+        if not self._previous_report:
+            QMessageBox.information(self, "Prev", "لا يوجد تقرير سابق خلال آخر 3 أشهر.")
+            return
+
+        prev_date = self._previous_report.get("report_date", "")
+
+        reply = QMessageBox.question(
+            self,
+            "Prev",
+            f"Previous report found on {prev_date}.\n\nDo you want to print it?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            pdf_path = self._build_previous_pdf()
+            if not pdf_path:
+                return
+
+            print_pdf(pdf_path)
+            QMessageBox.information(self, "Prev", "تم إرسال التقرير السابق إلى الطابعة.")
+        except Exception as e:
+            QMessageBox.warning(self, "Prev Error", f"فشل طباعة التقرير السابق:\n{e}")
 
 
 

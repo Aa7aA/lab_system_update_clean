@@ -1268,6 +1268,7 @@ def ensure_lab_settings_table(conn: sqlite3.Connection) -> None:
         "footer_text": "دوميز - شارع جامع الرشيد - مجمع الشفق الطبي - مجاور صيدلية ليا",
         "lab_phone": "07725017776",
         "whatsapp_number": "07725017776",
+        "previous_results_enabled": "0",
     }
 
     for key, value in defaults.items():
@@ -1489,3 +1490,154 @@ def init_db() -> None:
         conn.commit()
 
 
+
+
+def find_previous_test_results_for_report(
+    conn,
+    *,
+    patient_name: str,
+    current_report_id: str,
+    months: int = 3,
+) -> dict[tuple[str, str], dict]:
+    """
+    For Tests module only:
+    Find latest previous result for same patient + same category + same test
+    within the last N months.
+    """
+    patient_name = (patient_name or "").strip()
+    current_report_id = (current_report_id or "").strip()
+
+    if not patient_name:
+        return {}
+
+    rows = conn.execute(
+        """
+        SELECT
+            rr.category,
+            rr.test_name,
+            COALESCE(rr.result, '') AS result,
+            COALESCE(rr.unit, '') AS unit,
+            COALESCE(rr.flag, '') AS flag,
+            r.report_date
+        FROM report_results rr
+        JOIN reports r ON r.report_id = rr.report_id
+        WHERE
+            rr.module = 'Tests'
+            AND TRIM(COALESCE(rr.result, '')) <> ''
+            AND LOWER(TRIM(r.patient_name)) = LOWER(TRIM(?))
+            AND rr.report_id <> ?
+            AND date(r.report_date) >= date('now', ?)
+        ORDER BY date(r.report_date) DESC, r.updated_at DESC
+        """,
+        (patient_name, current_report_id, f"-{int(months)} months"),
+    ).fetchall()
+
+    out: dict[tuple[str, str], dict] = {}
+
+    for row in rows:
+        key = (str(row["category"] or ""), str(row["test_name"] or ""))
+        if key in out:
+            continue
+
+        out[key] = {
+            "category": str(row["category"] or ""),
+            "test_name": str(row["test_name"] or ""),
+            "result": str(row["result"] or ""),
+            "unit": str(row["unit"] or ""),
+            "flag": str(row["flag"] or ""),
+            "previous_date": str(row["report_date"] or ""),
+        }
+
+    return out
+
+
+def find_latest_previous_report(
+    conn,
+    *,
+    patient_name: str,
+    module_code: str,
+    current_report_id: str = "",
+    months: int = 3,
+) -> dict | None:
+    """
+    Find latest previous report for same patient + same module within N months.
+    Used by Prev button.
+    """
+    patient_name = (patient_name or "").strip()
+    module_code = (module_code or "").strip()
+    current_report_id = (current_report_id or "").strip()
+
+    if not patient_name or not module_code:
+        return None
+
+    row = conn.execute(
+        """
+        SELECT
+            r.report_id,
+            r.patient_name,
+            r.doctor_name,
+            r.gender,
+            r.age,
+            r.patient_code,
+            r.report_date
+        FROM reports r
+        WHERE
+            LOWER(TRIM(r.patient_name)) = LOWER(TRIM(?))
+            AND r.report_id <> ?
+            AND date(r.report_date) >= date('now', ?)
+            AND EXISTS (
+                SELECT 1
+                FROM report_results rr
+                WHERE rr.report_id = r.report_id
+                  AND rr.module = ?
+                  AND TRIM(COALESCE(rr.result, '')) <> ''
+            )
+        ORDER BY date(r.report_date) DESC, r.updated_at DESC
+        LIMIT 1
+        """,
+        (patient_name, current_report_id, f"-{int(months)} months", module_code),
+    ).fetchone()
+
+    return dict(row) if row else None
+
+
+def fetch_report_rows_for_pdf(conn, *, report_id: str, module_code: str) -> list[dict]:
+    """
+    Fetch saved rows for a previous report so it can be printed again.
+    """
+    rows = conn.execute(
+        """
+        SELECT
+            rr.category AS category,
+            rr.test_name AS test_name,
+            COALESCE(rr.result, '') AS result,
+            COALESCE(rr.unit, '') AS unit,
+            COALESCE(rr.flag, '') AS flag
+        FROM report_results rr
+        LEFT JOIN categories c
+            ON c.module_code = rr.module
+           AND c.name = rr.category
+        LEFT JOIN tests t
+            ON t.module_code = rr.module
+           AND t.category_name = rr.category
+           AND t.test_name = rr.test_name
+        WHERE rr.report_id = ?
+          AND rr.module = ?
+          AND TRIM(COALESCE(rr.result, '')) <> ''
+        ORDER BY
+            COALESCE(c.sort_order, 999999),
+            rr.category,
+            COALESCE(t.sort_order, 999999),
+            COALESCE(t.pos, 999999),
+            rr.test_name
+        """,
+        (report_id, module_code),
+    ).fetchall()
+
+    return [dict(r) for r in rows]
+
+
+
+def is_previous_results_enabled(conn) -> bool:
+    value = get_lab_setting(conn, "previous_results_enabled", "0")
+    return str(value or "0").strip() == "1"

@@ -21,11 +21,12 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QApplication,
     QScrollArea,
-    QMessageBox
+    QMessageBox,
 )
 
 from .ui_utils import apply_global_theme, fit_window_to_screen, apply_round_corners, show_blocking_child
 from .branding import LAB_BRANDING
+from .db import get_conn, get_lab_setting
 from .version import APP_VERSION, APP_CHANNEL
 from .lab_identity import get_lab_identity
 from .support_snapshot import export_support_snapshot
@@ -149,6 +150,44 @@ class SettingsWindow(QWidget):
         self.btn_support_snapshot = self.make_tool_button("Export Support Report")
 
 
+        self.chk_previous_results = QPushButton("تفعيل مقارنة النتائج السابقة")
+        self.chk_previous_results.setCheckable(True)
+        self.chk_previous_results.setMinimumHeight(48)
+        self.chk_previous_results.setCursor(Qt.PointingHandCursor)
+        self.chk_previous_results.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #28415f;
+                border: 1px solid #e4ebf5;
+                border-radius: 16px;
+                padding: 12px 14px;
+                font-size: 14px;
+                font-weight: 800;
+                text-align: center;
+            }
+
+            QPushButton:hover {
+                background-color: #f5f9ff;
+                border: 1px solid #8fc7ff;
+            }
+
+            QPushButton:checked {
+                background-color: #e8f2ff;
+                color: #0f3f7a;
+                border: 2px solid #3a7afe;
+            }
+        """)
+
+
+        with get_conn() as conn:
+            self.chk_previous_results.setChecked(
+                get_lab_setting(conn, "previous_results_enabled", "0") == "1"
+            )
+
+        self.chk_previous_results.toggled.connect(self.on_previous_results_changed)
+
+
+
 
         self.btn_doctors.clicked.connect(self.open_doctor_manager)
         self.btn_ranges.clicked.connect(self.open_normal_range_editor)
@@ -163,8 +202,9 @@ class SettingsWindow(QWidget):
         actions_layout.addWidget(self.btn_tests)
         actions_layout.addWidget(self.btn_modules)
         actions_layout.addWidget(self.btn_print)
+        actions_layout.addWidget(self.chk_previous_results)
         actions_layout.addWidget(self.btn_support_snapshot)
- 
+
 
         self.lbl_version_info = QLabel(
             f"Version: {APP_VERSION}   |   Channel: {APP_CHANNEL}   |   Lab ID: {identity['lab_id']}"
@@ -226,6 +266,29 @@ class SettingsWindow(QWidget):
         wrapper.addWidget(scroll)
 
         self._opened_windows = []
+
+
+
+    def on_previous_results_changed(self, checked: bool) -> None:
+        value = "1" if checked else "0"
+
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO lab_settings(setting_key, setting_value)
+                VALUES ('previous_results_enabled', ?)
+                ON CONFLICT(setting_key)
+                DO UPDATE SET setting_value = excluded.setting_value
+                """,
+                (value,),
+            )
+            conn.commit()
+
+
+
+
+
+
 
     def make_tool_button(self, text: str) -> QPushButton:
         btn = QPushButton(text)

@@ -12,10 +12,23 @@ from uuid import uuid4
 
 
 
-from PySide6.QtGui import QPixmap, QAction, QColor
+from PySide6.QtGui import (
+    QPixmap,
+    QAction,
+    QColor,
+    QRegularExpressionValidator,
+)
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QDate, QPoint, Signal, QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import (
+    Qt,
+    QDate,
+    QPoint,
+    Signal,
+    QEasingCurve,
+    QPropertyAnimation,
+    QRegularExpression,
+)
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -993,10 +1006,19 @@ class MainWindow(QMainWindow):
         pgrid.setVerticalSpacing(4)
 
         self.patient_name = QLineEdit()
+        self.patient_name.setLayoutDirection(Qt.RightToLeft)
+        self.patient_name.setAlignment(Qt.AlignRight)
         self.patient_name.setPlaceholderText("اسم المريض")
         self.patient_name.setMinimumHeight(38)
 
+        name_regex = QRegularExpression("[\\p{Arabic}A-Za-z ]+")
+        name_validator = QRegularExpressionValidator(name_regex)
+
+        self.patient_name.setValidator(name_validator)
+
+
         self.doctor = QComboBox()
+        self.doctor.setLayoutDirection(Qt.RightToLeft)
         self.doctor.setMinimumHeight(38)
 
         self.age_input_widget = QWidget()
@@ -1005,9 +1027,16 @@ class MainWindow(QMainWindow):
         age_layout.setSpacing(6)
 
         self.age_value = QLineEdit()
+        self.age_value.setLayoutDirection(Qt.RightToLeft)
+        self.age_value.setAlignment(Qt.AlignRight)
         self.age_value.setPlaceholderText("0")
         self.age_value.setMinimumHeight(38)
         self.age_value.setFixedWidth(80)
+
+        age_regex = QRegularExpression("[0-9]{0,3}")
+        age_validator = QRegularExpressionValidator(age_regex)
+
+        self.age_value.setValidator(age_validator)
 
         self.age_unit = QComboBox()
         self.age_unit.setMinimumHeight(38)
